@@ -4,7 +4,9 @@ using Quaver.Shared.Config;
 using Quaver.Shared.Graphics;
 using Quaver.Shared.Helpers;
 using Quaver.Shared.Online;
+using Quaver.Shared.Skinning;
 using Steamworks;
+using Wobble;
 using Wobble.Assets;
 using Wobble.Bindables;
 using Wobble.Graphics;
@@ -21,20 +23,21 @@ namespace Quaver.Shared.Screens.Results.UI.Header.Contents
 
         /// <summary>
         /// </summary>
-        private CircleAvatar Avatar { get; }
+        private SpriteAlphaMaskBlend Avatar { get; }
 
         public ResultsScreenHeaderAvatar(float size, Bindable<ScoreProcessor> processor)
         {
             Size = new ScalableVector2(size, size);
-            Image = UserInterface.ResultsAvatarBorder;
+            Image = SkinManager.Skin?.Results?.ResultsAvatarBorder ?? UserInterface.ResultsAvatarBorder;
 
             var avatarSize = size - OFFSET * 2;
 
-            Avatar = new CircleAvatar(new ScalableVector2(avatarSize, avatarSize), UserInterface.UnknownAvatar)
+            Avatar = new SpriteAlphaMaskBlend()
             {
                 Parent = this,
                 Alignment = Alignment.MidCenter,
-                Image = UserInterface.ResultsAvatarMask
+                Size = new ScalableVector2(avatarSize, avatarSize),
+                Image = UserInterface.UnknownAvatar
             };
 
             if (SteamManager.UserAvatars != null)
@@ -49,13 +52,19 @@ namespace Quaver.Shared.Screens.Results.UI.Header.Contents
                     var tex = SteamManager.UserAvatarsLarge[steamId];
 
                     if (tex != UserInterface.UnknownAvatar && SteamManager.UserAvatarsLarge.ContainsKey(steamId))
-                        Avatar.AvatarSprite.Image = tex;
+                        Avatar.Image = tex;
                     else if (tex == UserInterface.UnknownAvatar && SteamManager.UserAvatars.ContainsKey(steamId))
-                        Avatar.AvatarSprite.Image = SteamManager.UserAvatars[steamId];
+                        Avatar.Image = SteamManager.UserAvatars[steamId];
                     else
-                        Avatar.AvatarSprite.Image = UserInterface.UnknownAvatar;
+                        Avatar.Image = UserInterface.UnknownAvatar;
                 }
             }
+
+            GameBase.Game.ScheduledRenderTargetDraws.Add(() =>
+            {
+                var mask = SkinManager.Skin?.Results?.ResultsAvatarMask ?? UserInterface.ResultsAvatarMask;
+                Avatar.Image = Avatar.PerformBlend(Avatar.Image, mask);
+            });
         }
     }
 }

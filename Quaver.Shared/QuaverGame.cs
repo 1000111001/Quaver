@@ -14,6 +14,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
+using ManagedBass;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -59,6 +60,7 @@ using Quaver.Shared.Screens.Options;
 using Quaver.Shared.Screens.Selection;
 using Quaver.Shared.Screens.Selection.UI.FilterPanel;
 using Quaver.Shared.Screens.Settings;
+using Quaver.Shared.Screens.Tests.AutoMods;
 using Quaver.Shared.Screens.Tests.Border;
 using Quaver.Shared.Screens.Tests.Chat;
 using Quaver.Shared.Screens.Tests.CheckboxContainers;
@@ -99,6 +101,7 @@ using Quaver.Shared.Skinning;
 using Quaver.Shared.Window;
 using Steamworks;
 using Wobble;
+using Wobble.Audio;
 using Wobble.Audio.Samples;
 using Wobble.Audio.Tracks;
 using Wobble.Bindables;
@@ -205,6 +208,7 @@ namespace Quaver.Shared
         /// </summary>
         private Dictionary<string, Type> VisualTests { get; } = new Dictionary<string, Type>()
         {
+            {"AutoMod", typeof(AutoModTestScreen)},
             {"Main Menu", typeof(MainMenuScreen)},
             {"ResultsScreen (Multi)", typeof(TestResultsMultiScreen)},
             {"ResultsScreen", typeof(TestResultsScreen)},
@@ -264,12 +268,13 @@ namespace Quaver.Shared
         /// </summary>
         protected override void Initialize()
         {
+            QuaverScreenManager.Initialize();
             WindowManager.ChangeBaseResolution(new Vector2(1920, 1080));
             Resources.AddStore(new DllResourceStore("Quaver.Resources.dll"));
 
-            ChangeResolution();
             Graphics.IsFullScreen = ConfigManager.WindowFullScreen.Value;
             Window.IsBorderless = ConfigManager.WindowBorderless.Value;
+            ChangeResolution();
 
             // Don't change the actual display mode. Especially considering our support for arbitrary resolutions, this
             // can lead to completely locking up user's session (on Linux).
@@ -286,6 +291,9 @@ namespace Quaver.Shared
             DevicePeriod = ConfigManager.DevicePeriod.Value;
             DeviceBufferLength = DevicePeriod * ConfigManager.DeviceBufferLengthMultiplier.Value;
 
+#if VISUAL_TESTS
+            HotLoaderGame.Font = FontsBitmap.CodeProBold;
+#endif
             base.Initialize();
         }
 
@@ -303,9 +311,10 @@ namespace Quaver.Shared
 
 #if VISUAL_TESTS
             Window.Title = $"Quaver Visual Test Runner";
+            new InitializationScreen().OnFirstUpdate();
 #else
             Window.Title = !IsDeployedBuild ? $"Quaver - {Version}" : $"Quaver v{Version}";
-            QuaverScreenManager.ChangeScreen(new InitializationScreen());
+            QuaverScreenManager.ScheduleScreenChange(() => new InitializationScreen(), true);
 #endif
         }
 
@@ -316,6 +325,7 @@ namespace Quaver.Shared
         /// </summary>
         protected override void UnloadContent()
         {
+            ConfigManager.WriteConfigFileAsync().Wait();
             OnlineManager.Client?.Disconnect();
             Transitioner.Dispose();
             DiscordHelper.Shutdown();
@@ -358,7 +368,6 @@ namespace Quaver.Shared
             HandleGlobalInput(gameTime);
             HandleOnlineHubInput();
 
-            QuaverScreenManager.Update(gameTime);
             NotificationManager.Update(gameTime);
             VolumeController?.Update(gameTime);
             Transitioner.Update(gameTime);
@@ -404,6 +413,7 @@ namespace Quaver.Shared
         {
             DeleteTemporaryFiles();
 
+            SetAudioDevice();
             DatabaseManager.Initialize();
             ScoreDatabaseCache.CreateTable();
             MapDatabaseCache.Load(false);
@@ -427,7 +437,7 @@ namespace Quaver.Shared
                 AudioSample.GlobalVolume = e.Value * ConfigManager.VolumeEffect.Value / 100f;
             };
             ConfigManager.VolumeMusic.ValueChanged += (sender, e) => AudioTrack.GlobalVolume = ConfigManager.VolumeGlobal.Value * e.Value / 100f;
-            ConfigManager.VolumeEffect.ValueChanged += (sender, e) => AudioSample.GlobalVolume = ConfigManager.VolumeEffect.Value * e.Value / 100f;
+            ConfigManager.VolumeEffect.ValueChanged += (sender, e) => AudioSample.GlobalVolume = ConfigManager.VolumeGlobal.Value * e.Value / 100f;
 
             ConfigManager.Pitched.ValueChanged += (sender, e) =>
             {
@@ -702,13 +712,17 @@ namespace Quaver.Shared
         /// </summary>
         private void HandleKeyPressAltEnter()
         {
+            // Don't allow to change to fullscreen when playing
+            if (CurrentScreen?.Type == QuaverScreenType.Gameplay)
+                return;
+
             // Check for modifier keys
             if (!KeyboardManager.CurrentState.IsKeyDown(Keys.LeftAlt) && !KeyboardManager.CurrentState.IsKeyDown(Keys.RightAlt))
                 return;
 
             if (!KeyboardManager.IsUniqueKeyPress(Keys.Enter))
                 return;
-
+            
             ConfigManager.WindowFullScreen.Value = !ConfigManager.WindowFullScreen.Value;
         }
 
@@ -885,6 +899,8 @@ namespace Quaver.Shared
                     CurrentScreen?.Exit(() => new MultiplayerLobbyScreen());
                     break;
                 case QuaverScreenType.Multiplayer:
+                    var screen = (MultiplayerGameScreen) CurrentScreen;
+                    screen.DontLeaveGameUponScreenSwitch = true;
                     CurrentScreen?.Exit(() => new MultiplayerGameScreen());
                     break;
                 case QuaverScreenType.Music:
@@ -920,6 +936,25 @@ namespace Quaver.Shared
                     p.PriorityClass = priority;
             }
             catch (Win32Exception) { /* do nothing */ }
+        }
+
+        public static void SetAudioDevice(bool reloadResources = false)
+        {
+            for (var i = 1; i < Bass.DeviceCount; i++)
+            {
+                if (ConfigManager.AudioOutputDevice.Value != Bass.GetDeviceInfo(i).Name)
+                    continue;
+
+                AudioManager.Initialize(ConfigManager.DevicePeriod.Value, ConfigManager.DeviceBufferLengthMultiplier.Value, i);
+                break;
+            }
+
+            if (!reloadResources)
+                return;
+
+            AudioEngine.Track.Stop();
+            CustomAudioSampleCache.Dispose();
+            SkinManager.Skin.LoadSoundEffects();
         }
 
 #if VISUAL_TESTS

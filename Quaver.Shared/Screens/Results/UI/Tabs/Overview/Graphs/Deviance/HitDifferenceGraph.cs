@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Quaver.API.Enums;
 using Quaver.API.Helpers;
@@ -50,7 +47,7 @@ namespace Quaver.Shared.Screens.Results.UI.Tabs.Overview.Graphs.Deviance
         /// <summary>
         /// </summary>
         private void CreateGraph() => Graph = new ResultHitDifferenceGraph(new ScalableVector2(Width - 50, Height),
-            Processor.Value)
+            Processor.Value, Map)
         {
             Parent = this,
             Alignment = Alignment.TopRight,

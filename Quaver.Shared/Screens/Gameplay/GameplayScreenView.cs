@@ -13,7 +13,6 @@ using Quaver.API.Enums;
 using Quaver.API.Helpers;
 using Quaver.API.Maps.Processors.Rating;
 using Quaver.API.Maps.Processors.Scoring;
-using Quaver.API.Maps.Processors.Scoring.Data;
 using Quaver.API.Replays;
 using Quaver.Server.Client.Handlers;
 using Quaver.Server.Common.Enums;
@@ -22,16 +21,13 @@ using Quaver.Shared.Assets;
 using Quaver.Shared.Audio;
 using Quaver.Shared.Config;
 using Quaver.Shared.Database.Maps;
-using Quaver.Shared.Database.Scores;
 using Quaver.Shared.Graphics;
 using Quaver.Shared.Graphics.Backgrounds;
 using Quaver.Shared.Graphics.Notifications;
 using Quaver.Shared.Helpers;
 using Quaver.Shared.Modifiers;
 using Quaver.Shared.Online;
-using Quaver.Shared.Scheduling;
 using Quaver.Shared.Screens.Editor;
-using Quaver.Shared.Screens.Gameplay.Rulesets.Input;
 using Quaver.Shared.Screens.Gameplay.Rulesets.Keys.HitObjects;
 using Quaver.Shared.Screens.Gameplay.UI;
 using Quaver.Shared.Screens.Gameplay.UI.Counter;
@@ -39,21 +35,16 @@ using Quaver.Shared.Screens.Gameplay.UI.Multiplayer;
 using Quaver.Shared.Screens.Gameplay.UI.Offset;
 using Quaver.Shared.Screens.Gameplay.UI.Replays;
 using Quaver.Shared.Screens.Gameplay.UI.Scoreboard;
-using Quaver.Shared.Screens.Multiplayer;
-using Quaver.Shared.Screens.Result;
 using Quaver.Shared.Screens.Results;
-using Quaver.Shared.Screens.Select;
 using Quaver.Shared.Screens.Selection;
 using Quaver.Shared.Screens.Tournament.Gameplay;
 using Quaver.Shared.Skinning;
 using Steamworks;
 using Wobble;
-using Wobble.Assets;
 using Wobble.Graphics;
 using Wobble.Graphics.Animations;
 using Wobble.Graphics.Sprites;
 using Wobble.Graphics.UI;
-using Wobble.Logging;
 using Wobble.Screens;
 using Wobble.Window;
 using MathHelper = Microsoft.Xna.Framework.MathHelper;
@@ -215,7 +206,7 @@ namespace Quaver.Shared.Screens.Gameplay
         public GameplayScreenView(Screen screen) : base(screen)
         {
             Screen = (GameplayScreen)screen;
-            RatingProcessor = new RatingProcessorKeys(MapManager.Selected.Value.DifficultyFromMods(Screen.Ruleset.ScoreProcessor.Mods));
+            RatingProcessor = new RatingProcessorKeys(Screen.Map.SolveDifficulty(ModManager.Mods, true).OverallDifficulty);
 
             CreateBackground();
 
@@ -305,7 +296,10 @@ namespace Quaver.Shared.Screens.Gameplay
 
             // Notify the user if their local offset is actually set for this map.
             if (!Screen.IsSongSelectPreview && MapManager.Selected.Value.LocalOffset != 0)
-                NotificationManager.Show(NotificationLevel.Info, $"The local audio offset for this map is: {MapManager.Selected.Value.LocalOffset} ms");
+            {
+                NotificationManager.Show(NotificationLevel.Info, $"The local audio offset for this map is: {MapManager.Selected.Value.LocalOffset} ms",
+                    null, true);
+            }
 
             if (Screen.IsCalibratingOffset)
             {
@@ -397,7 +391,7 @@ namespace Quaver.Shared.Screens.Gameplay
                 skin.SongTimeProgressInactiveColor, skin.SongTimeProgressActiveColor)
             {
                 Parent = Container,
-                Alignment = Alignment.BotLeft,
+                Alignment = skin.SongTimeProgressPositionAtTop ? Alignment.TopLeft : Alignment.BotLeft,
                 DestroyIfParentIsNull = false
             };
         }
@@ -509,7 +503,7 @@ namespace Quaver.Shared.Screens.Gameplay
                 : UserInterface.UnknownAvatar;
 
             SelfScoreboard = new ScoreboardUser(Screen, ScoreboardUserType.Self, scoreboardName, null, selfAvatar,
-                ModManager.Mods)
+                ModManager.Mods, null, RatingProcessor)
             {
                 Parent = Container,
                 Alignment = Alignment.MidLeft
@@ -700,6 +694,12 @@ namespace Quaver.Shared.Screens.Gameplay
             if (!Screen.Failed && !Screen.IsPlayComplete || Screen.IsSongSelectPreview || Screen is TournamentGameplayScreen)
                 return;
 
+            if (Screen.Failed && !Screen.HasQuit && Screen.Ruleset.ScoreProcessor.Mods.HasFlag(ModIdentifier.NoMiss))
+            {
+                Screen.Retry();
+                return;
+            }
+
             Screen.TimeSincePlayEnded += gameTime.ElapsedGameTime.TotalMilliseconds;
 
             if (Screen.Exiting && Screen.Failed)
@@ -728,9 +728,20 @@ namespace Quaver.Shared.Screens.Gameplay
 
             if (!ResultsScreenLoadInitiated)
             {
+                Screen.TimePlayEnd = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
                 // Force all replay frames on failure
                 if (OnlineManager.IsBeingSpectated)
+                {
                     Screen.SendReplayFramesToServer(true);
+
+                    // Send final replay frame to let spectators know the song is complete
+                    if (OnlineManager.IsBeingSpectated)
+                    {
+                        OnlineManager.Client?.SendReplaySpectatorFrames(SpectatorClientStatus.FinishedSong, int.MaxValue,
+                            new List<ReplayFrame>());
+                    }
+                }
 
                 if (Screen.IsPlayTesting)
                 {
@@ -783,6 +794,12 @@ namespace Quaver.Shared.Screens.Gameplay
                             ModManager.RemoveMod(ModIdentifier.Paused);
 
                         return new SelectionScreen();
+                    }
+
+                    if (Screen.InReplayMode && Screen.LoadedReplay != null)
+                    {
+                        Screen.LoadedReplay.FromScoreProcessor(Screen.Ruleset.ScoreProcessor);
+                        return new ResultsScreen(MapManager.Selected.Value, Screen.LoadedReplay);
                     }
 
                     return new ResultsScreen(Screen);

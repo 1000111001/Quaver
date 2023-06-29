@@ -7,9 +7,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using Microsoft.Xna.Framework.Graphics;
+using Quaver.API.Enums;
 using Quaver.API.Maps;
 using Quaver.API.Maps.Parsers;
 using Quaver.Server.Client;
@@ -92,6 +94,53 @@ namespace Quaver.Shared.Database.Maps
         public static event EventHandler<SongRequestPlayedEventArgs> SongRequestPlayed;
 
         /// <summary>
+        ///     Select a map in the mapset based on user preferences
+        /// </summary>
+        public static void SelectMapFromMapset(Mapset mapset)
+        {
+            // local function to select map closest to target difficulty
+            Map Select(List<Map> maps, ModIdentifier mods)
+            {
+                if (maps.Count == 0) return null;
+
+                // target difficulty
+                double target4K = ConfigManager.PrioritizedMapDifficulty4K.Value / 10d;
+                double target7K = ConfigManager.PrioritizedMapDifficulty7K.Value / 10d;
+
+                // find closest map to target
+                var minDelta = Double.PositiveInfinity;
+                Map selection = null;
+
+                foreach (var map in maps)
+                {
+                    var target = map.Mode switch
+                    {
+                        GameMode.Keys4 => target4K,
+                        GameMode.Keys7 => target7K,
+                        _ => throw new InvalidOperationException("Map is an invalid game mode")
+                    };
+
+                    double delta = Math.Abs(map.DifficultyFromMods(mods) - target);
+
+                    if (delta < minDelta)
+                    {
+                        selection = map;
+                        minDelta = delta;
+                    }
+                }
+
+                return selection;
+            }
+
+            // prioritize a gamemode
+            List<Map> prioritized = mapset.Maps.FindAll(x => x.Mode == ConfigManager.PrioritizedGameMode.Value);
+
+            // select a map from the prioritized maps
+            // if no valid selection from prioritized maps, select from all maps instead
+            Selected.Value = Select(prioritized, ModManager.Mods) ?? Select(mapset.Maps, ModManager.Mods);
+        }
+
+        /// <summary>
         ///     Gets the background path for a given map.
         /// </summary>
         /// <param name="map"></param>
@@ -117,14 +166,48 @@ namespace Quaver.Shared.Database.Maps
         }
 
         /// <summary>
+        ///     Gets the banner path for a given map.
+        /// </summary>
+        /// <param name="map"></param>
+        /// <returns></returns>
+        public static string GetBannerPath(Map map)
+        {
+            if (map == null)
+                return "";
+
+            switch (map.Game)
+            {
+                case MapGame.Osu:
+                    return "";
+                case MapGame.Quaver:
+                    return ConfigManager.SongDirectory + "/" + map.Directory + "/" + map.BannerPath;
+                case MapGame.Etterna:
+                    return map.BannerPath;
+                default:
+                    return "";
+            }
+        }
+
+        /// <summary>
         ///     Returns the path of the banner file provided a mapset
         /// </summary>
         /// <param name="mapset"></param>
         /// <returns></returns>
-        public static string GetBannerPath(Mapset mapset)
+        public static string GetMapsetBannerPath(Mapset mapset)
         {
             var map = mapset.Maps.First();
-            return (ConfigManager.SongDirectory + "/" + map.Directory + "/" + map.BannerPath).Replace("\\", "/");
+
+            switch (map.Game)
+            {
+                case MapGame.Osu:
+                    return "";
+                case MapGame.Quaver:
+                    return (ConfigManager.SongDirectory + "/" + map.Directory + "/" + map.BannerPath).Replace("\\", "/");
+                case MapGame.Etterna:
+                    return map.BannerPath;
+                default:
+                    return "";
+            }
         }
 
         /// <summary>

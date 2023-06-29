@@ -14,7 +14,7 @@ using Quaver.Shared.Helpers;
 using Quaver.Shared.Online;
 using Quaver.Shared.Scheduling;
 using Quaver.Shared.Screens.Menu.UI.Jukebox;
-using Quaver.Shared.Screens.Select.UI.Leaderboard;
+using Quaver.Shared.Skinning;
 using TagLib.Ape;
 using Wobble.Graphics;
 using Wobble.Graphics.Animations;
@@ -334,7 +334,8 @@ namespace Quaver.Shared.Screens.Selection.UI.Leaderboard.Components
         /// <returns></returns>
         private bool RequiresDonator() => RequiresOnline()
                                           && (ConfigManager.LeaderboardSection.Value == LeaderboardType.Country
-                                          || ConfigManager.LeaderboardSection.Value == LeaderboardType.Friends);
+                                          || ConfigManager.LeaderboardSection.Value == LeaderboardType.Friends
+                                          || ConfigManager.LeaderboardSection.Value == LeaderboardType.All);
 
         /// <summary>
         ///     Creates <see cref="StatusText"/>
@@ -344,7 +345,8 @@ namespace Quaver.Shared.Screens.Selection.UI.Leaderboard.Components
             StatusText = new SpriteTextPlus(FontManager.GetWobbleFont(Fonts.LatoBlack), "", 20)
             {
                 Parent = this,
-                Alignment = Alignment.MidCenter
+                Alignment = Alignment.MidCenter,
+                Tint = SkinManager.Skin?.SongSelect?.LeaderboardStatusTextColor ?? Color.White
             };
         }
 

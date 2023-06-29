@@ -19,17 +19,20 @@ using Quaver.API.Maps.Processors.Scoring.Data;
 using Quaver.API.Maps.Processors.Scoring.Multiplayer;
 using Quaver.Server.Common.Objects.Multiplayer;
 using Quaver.Shared.Assets;
+using Quaver.Shared.Config;
 using Quaver.Shared.Database.Maps;
 using Quaver.Shared.Database.Scores;
 using Quaver.Shared.Graphics;
 using Quaver.Shared.Helpers;
 using Quaver.Shared.Online;
 using Quaver.Shared.Skinning;
+using Steamworks;
 using Wobble.Assets;
 using Wobble.Graphics;
 using Wobble.Graphics.Animations;
 using Wobble.Graphics.Sprites;
 using Wobble.Graphics.Sprites.Text;
+using Wobble.Logging;
 using Wobble.Managers;
 using Wobble.Window;
 
@@ -138,14 +141,16 @@ namespace Quaver.Shared.Screens.Gameplay.UI.Scoreboard
         /// <param name="avatar"></param>
         /// <param name="mods"></param>
         /// <param name="score"></param>
+        /// <param name="processor"></param>
         /// <exception cref="T:System.ComponentModel.InvalidEnumArgumentException"></exception>
-        internal ScoreboardUser(GameplayScreen screen, ScoreboardUserType type, string username, List<Judgement> judgements, Texture2D avatar, ModIdentifier mods, Score score = null)
+        internal ScoreboardUser(GameplayScreen screen, ScoreboardUserType type, string username, List<Judgement> judgements, Texture2D avatar,
+            ModIdentifier mods, Score score = null, RatingProcessorKeys processor = null)
         {
             Screen = screen;
             LocalScore = score;
             Judgements = judgements;
             UsernameRaw = username;
-            RatingProcessor = new RatingProcessorKeys(MapManager.Selected.Value.DifficultyFromMods(mods));
+            RatingProcessor = (RatingProcessorKeys) score?.RatingProcessor ?? processor ?? new RatingProcessorKeys(MapManager.Selected.Value.DifficultyFromMods(mods));
             Type = type;
             Size = new ScalableVector2(299, 58);
 
@@ -223,7 +228,9 @@ namespace Quaver.Shared.Screens.Gameplay.UI.Scoreboard
                 }
                 else
                 {
-                    Avatar.Image = UserInterface.UnknownAvatar;
+                    Avatar.Image = ConfigManager.Username?.Value == UsernameRaw
+                        ? SteamManager.UserAvatars[SteamUser.GetSteamID().m_SteamID]
+                        : UserInterface.UnknownAvatar;
                 }
             }
 
@@ -331,26 +338,33 @@ namespace Quaver.Shared.Screens.Gameplay.UI.Scoreboard
         /// </summary>
         public void SetTintBasedOnHealth()
         {
-            if (Processor == null || Username == null)
-                return;
-
-            if (Processor.MultiplayerProcessor != null)
+            try
             {
-                if (Processor.MultiplayerProcessor.IsEliminated || Processor.MultiplayerProcessor.IsRegeneratingHealth)
-                {
-                    Username.Tint = Color.Red;
+                if (Processor == null || Username == null)
                     return;
-                }
-            }
 
-            if (Processor.Health >= 60)
-                Username.Tint = Color.White;
-            else if (Processor.Health >= 40)
-                Username.Tint = Color.Yellow;
-            else if (Processor.Health >= 1)
-                Username.Tint = Color.Orange;
-            else
-                Username.Tint = Color.Red;
+                if (Processor.MultiplayerProcessor != null)
+                {
+                    if (Processor.MultiplayerProcessor.IsEliminated || Processor.MultiplayerProcessor.IsRegeneratingHealth)
+                    {
+                        Username.Tint = Color.Red;
+                        return;
+                    }
+                }
+
+                if (Processor.Health >= 60)
+                    Username.Tint = Color.White;
+                else if (Processor.Health >= 40)
+                    Username.Tint = Color.Yellow;
+                else if (Processor.Health >= 1)
+                    Username.Tint = Color.Orange;
+                else
+                    Username.Tint = Color.Red;
+            }
+            catch (Exception e)
+            {
+                Logger.Error(e, LogType.Runtime);
+            }
         }
 
         /// <summary>

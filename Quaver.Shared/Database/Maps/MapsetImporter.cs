@@ -9,6 +9,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
+using Quaver.API.Helpers;
 using Quaver.API.Maps;
 using Quaver.API.Maps.Processors.Difficulty.Rulesets.Keys;
 using Quaver.API.Replays;
@@ -22,11 +24,8 @@ using Quaver.Shared.Graphics.Notifications;
 using Quaver.Shared.Online;
 using Quaver.Shared.Screens;
 using Quaver.Shared.Screens.Edit;
-using Quaver.Shared.Screens.Editor;
 using Quaver.Shared.Screens.Importing;
 using Quaver.Shared.Screens.Multi;
-using Quaver.Shared.Screens.Multiplayer;
-using Quaver.Shared.Screens.Result;
 using Quaver.Shared.Screens.Results;
 using Quaver.Shared.Screens.Selection;
 using Quaver.Shared.Skinning;
@@ -34,7 +33,6 @@ using SharpCompress.Archives;
 using SharpCompress.Common;
 using Wobble;
 using Wobble.Logging;
-using Wobble.Screens;
 
 namespace Quaver.Shared.Database.Maps
 {
@@ -88,23 +86,14 @@ namespace Quaver.Shared.Database.Maps
         }
 
         /// <summary>
-        ///     Tries to import the given file, be it a map, a replay, a skin, etc.
-        ///     <param name="path">path to the file to import</param>
+        ///     Starts importing of queued Maps.
         /// </summary>
-        public static void ImportFile(string path)
+        private static void PostMapQueue()
         {
-            var game = GameBase.Game as QuaverGame;
-            var screen = game.CurrentScreen;
+             var game = GameBase.Game as QuaverGame;
+             var screen = game.CurrentScreen;
 
-            // Mapset files
-            if (path.EndsWith(".qp") || path.EndsWith(".osz") || path.EndsWith(".sm") || path.EndsWith(".mcz") || path.EndsWith(".mc"))
-            {
-                Queue.Add(path);
-
-                var log = $"Scheduled {Path.GetFileName(path)} to be imported!";
-                NotificationManager.Show(NotificationLevel.Info, log);
-
-                if (screen.Exiting)
+             if (screen.Exiting)
                     return;
 
                 if (screen.Type == QuaverScreenType.Select)
@@ -128,12 +117,41 @@ namespace Quaver.Shared.Database.Maps
 
                 if (screen.Type == QuaverScreenType.Multiplayer)
                 {
-                    var multi = (MultiplayerGameScreen) screen;
+                    var multi = (MultiplayerGameScreen)screen;
                     multi.DontLeaveGameUponScreenSwitch = true;
 
                     screen.Exit(() => new ImportingScreen());
                     return;
                 }
+        }
+
+        /// <summary>
+        ///     Simply returns true if the file given matches a map type which can be imported. False otherwise.
+        /// </summary>
+        /// <param name="path">Path to file</param>
+        private static bool AcceptedMapType(string path)
+        {
+            return path.EndsWith(".qp") || path.EndsWith(".osz") || path.EndsWith(".sm") || path.EndsWith(".mcz") || path.EndsWith(".mc");
+        }
+
+        /// <summary>
+        ///     Tries to import the given file, be it a map, a replay, a skin, etc.
+        ///     <param name="path">path to the file to import</param>
+        /// </summary>
+        public static void ImportFile(string path)
+        {
+            var game = GameBase.Game as QuaverGame;
+            var screen = game.CurrentScreen;
+
+            // Mapset files (or directory of Mapset files)
+            if (AcceptedMapType(path))
+            {
+                Queue.Add(path);
+
+                var log = $"Scheduled {Path.GetFileName(path)} to be imported!";
+                NotificationManager.Show(NotificationLevel.Info, log);
+
+                PostMapQueue();
             }
             // Quaver Replay
             else if (path.EndsWith(".qr"))
@@ -243,28 +261,53 @@ namespace Quaver.Shared.Database.Maps
                 ConfigManager.AutoLoadOsuBeatmaps.Value = true;
                 NotificationManager.Show(NotificationLevel.Success, $"Successfully set the path for your .db file");
             }
+            // Folder with maps
+            else if (File.GetAttributes(path).HasFlag(FileAttributes.Directory))
+            {
+                var files = Directory.GetFiles(path);
+                var dirs = Directory.GetDirectories(path);
+
+                foreach (var subPath in files)
+                {
+                    if (AcceptedMapType(subPath))
+                    {
+                        NotificationManager.Show(NotificationLevel.Info, $"Scheduled {Path.GetFileName(subPath)} to be imported!");
+                        Queue.Add(subPath);
+                    }
+                }
+                foreach (var subDir in dirs)
+                {
+                    ImportFile(subDir);
+                }
+
+                PostMapQueue();
+            }
         }
 
         /// <summary>
         ///     Goes through all the mapsets in the queue and imports them.
         /// </summary>
-        public static void ImportMapsetsInQueue()
+        public static void ImportMapsetsInQueue(int? selectMapIdAfterImport = null)
         {
             Map selectedMap = null;
 
             if (MapManager.Selected.Value != null)
                 selectedMap = MapManager.Selected.Value;
 
-            for (var i = 0; i < Queue.Count; i++)
+            var done = -1;
+
+            Parallel.For(0, Queue.Count, new ParallelOptions { MaxDegreeOfParallelism = 4 }, i =>
             {
                 var file = Queue[i];
                 var time = (long) DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1)).Milliseconds;
-                var extractDirectory = $@"{ConfigManager.SongDirectory}/{Path.GetFileNameWithoutExtension(file)} - {time}/";
+
+                var folderName = Path.GetFileNameWithoutExtension(file);
+                folderName = folderName.Substring(0, Math.Min(folderName.Length, 100));
+
+                var extractDirectory = $@"{ConfigManager.SongDirectory}/{folderName} - {time}/";
 
                 try
                 {
-                    ImportingMapset?.Invoke(typeof(MapsetImporter), new ImportingMapsetEventArgs(Queue, Path.GetFileName(file), i));
-
                     if (file.EndsWith(".qp"))
                     {
                         ExtractQuaverMapset(file, extractDirectory);
@@ -288,26 +331,41 @@ namespace Quaver.Shared.Database.Maps
                     selectedMap = InsertAndUpdateSelectedMap(extractDirectory);
 
                     Logger.Important($"Successfully imported {file}", LogType.Runtime);
+
+                    done++;
+                    ImportingMapset?.Invoke(typeof(MapsetImporter), new ImportingMapsetEventArgs(Queue, Path.GetFileName(file), done));
                 }
                 catch (Exception e)
                 {
                     Logger.Error(e, LogType.Runtime);
                     NotificationManager.Show(NotificationLevel.Error, $"Failed to import file: {Path.GetFileName(file)}");
                 }
-            }
+            });
 
-            MapDatabaseCache.OrderAndSetMapsets();
+            MapDatabaseCache.OrderAndSetMapsets(true);
             Queue.Clear();
 
             if (MapManager.Mapsets.Count == 0)
                 return;
+
+            // If specific map id was given, select that one.
+            if (selectMapIdAfterImport != null)
+            {
+                var map = MapManager.FindMapFromOnlineId(selectMapIdAfterImport.Value);
+
+                if (map != null)
+                {
+                    MapManager.Selected.Value = map;
+                    return;
+                }
+            }
 
             var mapset = MapManager.Mapsets.Find(x => x.Maps.Any(y => y.Md5Checksum == selectedMap?.Md5Checksum));
 
             if (mapset == null)
             {
                 mapset = MapManager.Mapsets.First();
-                MapManager.Selected.Value = mapset.Maps.First();
+                MapManager.SelectMapFromMapset(mapset);
             }
             else
                 MapManager.Selected.Value = mapset.Maps.Find(x => x.Md5Checksum == selectedMap?.Md5Checksum);
@@ -320,20 +378,46 @@ namespace Quaver.Shared.Database.Maps
         /// <param name="extractPath"></param>
         private static void ExtractQuaverMapset(string fileName, string extractPath)
         {
-            try
+            var options = new ExtractionOptions {ExtractFullPath = true, Overwrite = true};
+
+            using (var archive = ArchiveFactory.Open(fileName))
             {
-                using (var archive = ArchiveFactory.Open(fileName))
+                foreach (var entry in archive.Entries)
                 {
-                    foreach (var entry in archive.Entries)
+                    if (entry.IsDirectory)
+                        continue;
+
+                    try
                     {
-                        if (!entry.IsDirectory)
-                            entry.WriteToDirectory(extractPath, new ExtractionOptions() { ExtractFullPath = true, Overwrite = true });
+                        entry.WriteToDirectory(extractPath, options);
+                    }
+                    catch (Exception e)
+                    {
+                        var path = entry.Key;
+                        Logger.Warning($"Entry `{path}` failed to extract: {e}", LogType.Runtime);
+
+                        if (Path.GetExtension(path) != ".qua" || Path.GetDirectoryName(path) != "")
+                        {
+                            // Can't try a different name for other files as they are referenced by name.
+                            throw;
+                        }
+
+                        path = Path.Join(extractPath, CryptoHelper.StringToMd5(path) + ".qua");
+                        Logger.Warning($"Trying with a different file name: {path}...", LogType.Runtime);
+
+                        try
+                        {
+                            entry.WriteToFile(path, options);
+                        }
+                        catch (Exception e2)
+                        {
+                            Logger.Warning($"Entry `{path}` failed to extract: {e2}", LogType.Runtime);
+
+                            // Oh well.
+                            throw;
+                        }
                     }
                 }
-            }
-            catch (Exception e)
-            {
-                Logger.Error(e, LogType.Runtime);
             }
         }
 
@@ -360,10 +444,11 @@ namespace Quaver.Shared.Database.Maps
                     {
                         map.RankedStatus = info.Map.RankedStatus;
                         map.DateLastUpdated = info.Map.DateLastUpdated;
+                        map.OnlineOffset = info.Map.OnlineOffset;
                     }
 
                     map.CalculateDifficulties();
-                    MapDatabaseCache.InsertMap(map, quaFile);
+                    MapDatabaseCache.InsertMap(map);
                     lastImported = map;
                 }
             }

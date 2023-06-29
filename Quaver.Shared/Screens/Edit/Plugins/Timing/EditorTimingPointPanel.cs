@@ -4,6 +4,7 @@ using System.Linq;
 using System.Numerics;
 using ImGuiNET;
 using Microsoft.Xna.Framework.Input;
+using Quaver.API.Enums;
 using Quaver.API.Maps.Structures;
 using Quaver.Shared.Screens.Edit.Actions.Timing.AddBatch;
 using TagLib.Matroska;
@@ -39,6 +40,10 @@ namespace Quaver.Shared.Screens.Edit.Plugins.Timing
         /// <summary>
         /// </summary>
         public bool IsBuiltIn { get; set; } = true;
+
+        public string Directory { get; set; }
+
+        public bool IsWorkshop { get; set; }
 
         /// <summary>
         /// </summary>
@@ -97,7 +102,7 @@ namespace Quaver.Shared.Screens.Edit.Plugins.Timing
         /// </summary>
         protected override void RenderImguiLayout()
         {
-            ImGui.SetNextWindowSizeConstraints(new Vector2(356, 0), new Vector2(356, float.MaxValue));
+            ImGui.SetNextWindowSizeConstraints(new Vector2(450, 0), new Vector2(450, float.MaxValue));
             ImGui.PushFont(Options.Fonts.First().Context);
             ImGui.Begin(Name);
 
@@ -120,6 +125,9 @@ namespace Quaver.Shared.Screens.Edit.Plugins.Timing
 
             ImGui.Dummy(new Vector2(0, 10));
             DrawBpmTextbox();
+
+            ImGui.Dummy(new Vector2(0, 10));
+            DrawSignatureTextbox();
 
             var isHovered = ImGui.IsWindowHovered() || ImGui.IsAnyItemFocused();
 
@@ -156,7 +164,8 @@ namespace Quaver.Shared.Screens.Edit.Plugins.Timing
                 var point = new TimingPointInfo
                 {
                     StartTime = (float)Screen.Track.Time,
-                    Bpm = bpm
+                    Bpm = bpm,
+                    Signature = TimeSignature.Quadruple
                 };
 
                 Screen.ActionManager.PlaceTimingPoint(point);
@@ -307,12 +316,42 @@ namespace Quaver.Shared.Screens.Edit.Plugins.Timing
 
             ImGui.TextWrapped("BPM");
 
-            if (ImGui.InputFloat(" ", ref bpm, 1, 0.1f, format, ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll))
+            if (ImGui.InputFloat("##bpm", ref bpm, 1, 0.1f, format, ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll))
             {
                 if (SelectedTimingPoints.Count == 1)
                     Screen.ActionManager.ChangeTimingPointBpm(SelectedTimingPoints.First(), bpm);
                 else
                     Screen.ActionManager.ChangeTimingPointBpmBatch(SelectedTimingPoints, bpm);
+            }
+        }
+
+        /// <summary>
+        /// </summary>
+        private void DrawSignatureTextbox()
+        {
+            var signature = 0;
+
+            if (SelectedTimingPoints.Count == 1)
+            {
+                var point = SelectedTimingPoints.First();
+                signature = (int)point.Signature;
+            }
+            // All points are the same signature
+            else if (SelectedTimingPoints.Count > 1 && SelectedTimingPoints.All(x => x.Signature == SelectedTimingPoints.First().Signature))
+            {
+                signature = (int)SelectedTimingPoints.First().Signature;
+            }
+
+            ImGui.TextWrapped("Signature");
+
+            if (ImGui.InputInt("##signature", ref signature, 1, 1, ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll))
+            {
+                signature = Math.Max(signature, 1);
+
+                if (SelectedTimingPoints.Count == 1)
+                    Screen.ActionManager.ChangeTimingPointSignature(SelectedTimingPoints.First(), signature);
+                else
+                    Screen.ActionManager.ChangeTimingPointSignatureBatch(SelectedTimingPoints, signature);
             }
         }
 
@@ -337,11 +376,15 @@ namespace Quaver.Shared.Screens.Edit.Plugins.Timing
         /// </summary>
         private void DrawTableHeader()
         {
-            ImGui.Columns(2);
+            ImGui.Columns(4);
             ImGui.SetColumnWidth(0, 160);
             ImGui.TextWrapped("Time");
             ImGui.NextColumn();
             ImGui.TextWrapped("BPM");
+            ImGui.NextColumn();
+            ImGui.TextWrapped("Signature");
+            ImGui.NextColumn();
+            ImGui.TextWrapped("Hide Lines");
             ImGui.Columns();
             ImGui.Separator();
         }
@@ -352,7 +395,7 @@ namespace Quaver.Shared.Screens.Edit.Plugins.Timing
         {
             ImGui.BeginChild("Timing Point Area");
 
-            ImGui.Columns(2);
+            ImGui.Columns(4);
             ImGui.SetColumnWidth(0, 160);
 
             if (
@@ -365,8 +408,14 @@ namespace Quaver.Shared.Screens.Edit.Plugins.Timing
                 NeedsToScrollToLastSelectedPoint = false;
             }
 
-            foreach (var point in Screen.WorkingMap.TimingPoints)
+            for (int i = 0; i < Screen.WorkingMap.TimingPoints.Count; i++)
             {
+                // https://github.com/ocornut/imgui/blob/master/docs/FAQ.md#q-why-is-my-widget-not-reacting-when-i-click-on-it
+                // allows all timing points with same truncated time to be selected, instead of just the first in list
+                ImGui.PushID(i);
+
+                var point = Screen.WorkingMap.TimingPoints[i];
+
                 var isSelected = SelectedTimingPoints.Contains(point);
 
                 if (!isSelected)
@@ -435,7 +484,17 @@ namespace Quaver.Shared.Screens.Edit.Plugins.Timing
 
                 ImGui.NextColumn();
                 ImGui.TextWrapped($"{point.Bpm:0.00}");
+
                 ImGui.NextColumn();
+                ImGui.TextWrapped($"{(int)point.Signature}/4");
+
+                ImGui.NextColumn();
+                var hidden = point.Hidden;
+                if (ImGui.Checkbox($"##{point.StartTime}", ref hidden))
+                    Screen.ActionManager.ChangeTimingPointHidden(point, hidden);
+
+                ImGui.NextColumn();
+                ImGui.PopID();
             }
 
             IsWindowHovered = ImGui.IsWindowHovered() || ImGui.IsAnyItemFocused();

@@ -4,6 +4,8 @@ using System.Numerics;
 using ImGuiNET;
 using MoonSharp.Interpreter;
 using Quaver.API.Enums;
+using Quaver.Shared.Config;
+using Quaver.Shared.Screens.Edit.Actions;
 using Quaver.Shared.Scripting;
 
 namespace Quaver.Shared.Screens.Edit.Plugins
@@ -39,6 +41,10 @@ namespace Quaver.Shared.Screens.Edit.Plugins
         /// </summary>
         public bool IsBuiltIn { get; set; }
 
+        public string Directory { get; set; }
+
+        public bool IsWorkshop { get; set; }
+
         public EditorPluginMap EditorPluginMap { get; set; }
 
         /// <inheritdoc />
@@ -50,19 +56,27 @@ namespace Quaver.Shared.Screens.Edit.Plugins
         /// <param name="description"></param>
         /// <param name="filePath"></param>
         /// <param name="isResource"></param>
-        public EditorPlugin(EditScreen editScreen, string name, string author, string description, string filePath, bool isResource = false) : base(filePath, isResource)
+        /// <param name="directory"></param>
+        /// <param name="isWorkshop"></param>
+        public EditorPlugin(EditScreen editScreen, string name, string author, string description, string filePath,
+            bool isResource = false, string directory = null, bool isWorkshop = false) : base(filePath, isResource)
         {
             Editor = editScreen;
             Name = name;
             Author = author;
             Description = description;
             IsBuiltIn = isResource;
+            Directory = directory;
+            IsWorkshop = isWorkshop;
+
+            EditorPluginUtils.EditScreen = editScreen;
 
             EditorPluginMap = new EditorPluginMap();
 
             UserData.RegisterType<GameMode>();
             UserData.RegisterType<HitSounds>();
             UserData.RegisterType<TimeSignature>();
+            UserData.RegisterType<EditorActionType>();
         }
 
         /// <inheritdoc />
@@ -81,16 +95,22 @@ namespace Quaver.Shared.Screens.Edit.Plugins
             WorkingScript.Globals["game_mode"] = typeof(GameMode);
             WorkingScript.Globals["hitsounds"] = typeof(HitSounds);
             WorkingScript.Globals["time_signature"] = typeof(TimeSignature);
+            WorkingScript.Globals["action_type"] = typeof(EditorActionType);
             WorkingScript.Globals["actions"] = Editor.ActionManager.PluginActionManager;
 
             var state = (EditorPluginState)State;
 
-            state.SongTime = (int)Math.Round(Editor.Track.Time, MidpointRounding.AwayFromZero);
+            state.SongTime = Editor.Track.Time;
             state.UnixTime = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             state.SelectedHitObjects = Editor.SelectedHitObjects.Value;
             state.CurrentTimingPoint = Editor.WorkingMap.GetTimingPointAt(state.SongTime);
+            state.CurrentSnap = Editor.BeatSnap.Value;
+            state.CurrentLayer = Editor.SelectedLayer.Value ?? Editor.DefaultLayer;
+            state.WindowSize = new Vector2(ConfigManager.WindowWidth.Value, ConfigManager.WindowHeight.Value);
 
             EditorPluginMap.Map = Editor.WorkingMap;
+            EditorPluginMap.Track = Editor.Track;
+            EditorPluginMap.DefaultLayer = Editor.DefaultLayer;
             EditorPluginMap.SetFrameState();
             WorkingScript.Globals["map"] = EditorPluginMap;
 

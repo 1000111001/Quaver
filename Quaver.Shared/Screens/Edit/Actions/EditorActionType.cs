@@ -17,6 +17,7 @@ namespace Quaver.Shared.Screens.Edit.Actions
         RenameLayer,
         MoveToLayer,
         ColorLayer,
+        ToggleLayerVisibility,
         AddScrollVelocity,
         RemoveScrollVelocity,
         AddScrollVelocityBatch,
@@ -28,11 +29,21 @@ namespace Quaver.Shared.Screens.Edit.Actions
         ChangePreviewTime,
         ChangeTimingPointOffset,
         ChangeTimingPointBpm,
+        ChangeTimingPointSignature,
+        ChangeTimingPointHidden,
         ResetTimingPoint,
         ChangeTimingPointBpmBatch,
+        ChangeTimingPointSignatureBatch,
         ChangeTimingPointOffsetBatch,
         ChangeScrollVelocityOffsetBatch,
         ChangeScrollVelocityMultiplierBatch,
-        ApplyOffset
+        ApplyOffset,
+        ResnapHitObjects,
+        Batch,
+        ReverseHitObjects,
+        AddBookmark,
+        EditBookmark,
+        RemoveBookmark,
+        ChangeBookmarkOffsetBatch
     }
 }

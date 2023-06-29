@@ -5,7 +5,6 @@
  * Copyright (c) Swan & The Quaver Team <support@quavergame.com>.
 */
 
-using System;
 using System.Linq;
 using Quaver.Server.Common.Objects;
 using Quaver.Server.Common.Objects.Listening;
@@ -18,10 +17,8 @@ using Quaver.Shared.Screens.Main;
 using Quaver.Shared.Screens.Multi;
 using Quaver.Shared.Screens.Multiplayer;
 using Quaver.Shared.Screens.Music;
-using Quaver.Shared.Screens.Select;
+using Quaver.Shared.Screens.Options.Items.Custom;
 using Quaver.Shared.Screens.Selection;
-using Quaver.Shared.Screens.Settings;
-using Wobble.Graphics.UI.Dialogs;
 using Wobble.Logging;
 using Wobble.Screens;
 
@@ -60,6 +57,11 @@ namespace Quaver.Shared.Screens.Importing
         ///	</summary>
         private bool FullSync { get; set; }
 
+        /// <summary>
+        ///     Selects a specific difficulty after importing, useful for song requests or IPC messages
+        /// </summary>
+        private int? SelectMapIdAfterImport { get; set; }
+
         /// <inheritdoc />
         /// <summary>
         /// </summary>
@@ -68,11 +70,13 @@ namespace Quaver.Shared.Screens.Importing
 
         /// <summary>
         /// </summary>
-        public ImportingScreen(MultiplayerScreen multiplayerScreen = null, bool fromSelect = false, bool fullSync = false)
+        public ImportingScreen(MultiplayerScreen multiplayerScreen = null, bool fromSelect = false,
+            bool fullSync = false, int? selectMapIdAfterImport = null)
         {
             ComingFromSelect = fromSelect;
             FullSync = fullSync;
             MultiplayerScreen = multiplayerScreen;
+            SelectMapIdAfterImport = selectMapIdAfterImport;
 
             PreviouslySelectedMap = MapManager.Selected.Value;
             View = new ImportingScreenView(this);
@@ -100,8 +104,8 @@ namespace Quaver.Shared.Screens.Importing
                     QuaverSettingsDatabaseCache.RecalculateDifficultiesForOutdatedMaps();
                 }
 
-                MapsetImporter.ImportMapsetsInQueue();
-                OnImportCompletion();
+                MapsetImporter.ImportMapsetsInQueue(SelectMapIdAfterImport);
+                OnImportCompletion(true);
             });
 
             base.OnFirstUpdate();
@@ -110,9 +114,12 @@ namespace Quaver.Shared.Screens.Importing
         /// <summary>
         ///     Called after all maps have been imported to the database.
         /// </summary>
-        private void OnImportCompletion()
+        private void OnImportCompletion(bool refreshMapsetStatuses = false)
         {
             Logger.Important($"Map import has completed", LogType.Runtime);
+
+            if (FullSync || refreshMapsetStatuses)
+                OptionsItemUpdateRankedStatuses.Run(false);
 
             if (OnlineManager.CurrentGame != null)
             {

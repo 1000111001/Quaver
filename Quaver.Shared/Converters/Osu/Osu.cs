@@ -77,11 +77,14 @@ namespace Quaver.Shared.Converters.Osu
                     switch (Path.GetExtension(tempFile).ToLower())
                     {
                         case ".qua":
+                            File.Move(tempFile, $"{extractDirectory}/{Guid.NewGuid()}.qua");
+                            break;
                         case ".mp3":
                         case ".jpg":
                         case ".png":
                         case ".jpeg":
                         case ".ogg":
+                        case ".wav":
                             File.Move(tempFile, fileName);
                             break;
                         default:

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using Microsoft.Xna.Framework;
@@ -10,14 +9,12 @@ using Quaver.API.Helpers;
 using Quaver.API.Maps.Processors.Difficulty.Rulesets.Keys;
 using Quaver.API.Maps.Processors.Rating;
 using Quaver.API.Maps.Processors.Scoring;
-using Quaver.API.Maps.Processors.Scoring.Data;
 using Quaver.API.Replays;
 using Quaver.API.Replays.Virtual;
 using Quaver.Server.Client;
 using Quaver.Server.Client.Events.Scores;
 using Quaver.Server.Client.Structures;
 using Quaver.Server.Common.Enums;
-using Quaver.Server.Common.Helpers;
 using Quaver.Server.Common.Objects;
 using Quaver.Server.Common.Objects.Multiplayer;
 using Quaver.Shared.Config;
@@ -36,11 +33,12 @@ using Quaver.Shared.Screens.Gameplay;
 using Quaver.Shared.Screens.Gameplay.Rulesets.Input;
 using Quaver.Shared.Screens.Loading;
 using Quaver.Shared.Screens.Multi;
-using Quaver.Shared.Screens.Results.UI;
 using Quaver.Shared.Screens.Results.UI.Header.Contents.Tabs;
 using Quaver.Shared.Screens.Selection;
 using Quaver.Shared.Screens.Tournament.Gameplay;
+using Quaver.Shared.Skinning;
 using Wobble;
+using Wobble.Audio.Samples;
 using Wobble.Bindables;
 using Wobble.Graphics.UI.Dialogs;
 using Wobble.Input;
@@ -121,6 +119,11 @@ namespace Quaver.Shared.Screens.Results
         public bool FixedLocalOffset { get; private set; }
 
         /// <summary>
+        ///     Audio channel to play the applause sound
+        /// </summary>
+        public AudioSampleChannel ApplauseChannel { get; }
+
+        /// <summary>
         /// </summary>
         /// <param name="screen"></param>
         public ResultsScreen(GameplayScreen screen)
@@ -134,6 +137,12 @@ namespace Quaver.Shared.Screens.Results
 
             SetDiscordRichPresence();
             View = new ResultsScreenView(this);
+
+            if (!Gameplay.Failed)
+            {
+                ApplauseChannel = SkinManager.Skin.SoundApplause.CreateChannel();
+                ApplauseChannel.Play();
+            }
         }
 
         /// <summary>
@@ -252,6 +261,9 @@ namespace Quaver.Shared.Screens.Results
         /// </summary>
         public override void Destroy()
         {
+            if (ApplauseChannel != null && ApplauseChannel.HasPlayed && !ApplauseChannel.HasStopped)
+                ApplauseChannel.Stop();
+
             Processor.Dispose();
             ActiveTab.Dispose();
             IsSubmittingScore.Dispose();
@@ -449,11 +461,15 @@ namespace Quaver.Shared.Screens.Results
         /// </summary>
         private void HandleInput()
         {
+            if (Exiting)
+                return;
+
             if (DialogManager.Dialogs.Count > 0)
                 return;
 
             HandleKeyPressEscape();
             HandleKeyPressTab();
+            HandleKeyPressRetry();
         }
 
         /// <summary>
@@ -498,6 +514,30 @@ namespace Quaver.Shared.Screens.Results
                 return;
 
             ActiveTab.Value = val;
+        }
+
+        /// <summary>
+        /// </summary>
+        private void HandleKeyPressRetry()
+        {
+            if (!KeyboardManager.IsUniqueKeyPress(ConfigManager.KeyRestartMap?.Value ?? Keys.OemTilde))
+                return;
+
+            if (OnlineManager.IsSpectatingSomeone)
+                return;
+
+            if (OnlineManager.CurrentGame != null)
+                return;
+
+            switch (ScreenType)
+            {
+                case ResultsScreenType.Gameplay:
+                    RetryMap();
+                    break;
+                case ResultsScreenType.Replay:
+                    WatchReplay();
+                    break;
+            }
         }
 
         /// <summary>
@@ -663,11 +703,8 @@ namespace Quaver.Shared.Screens.Results
                 OnlineManager.Client.OnScoreSubmitted += OnScoreSubmitted;
             }
 
-            ThreadScheduler.Run(() =>
-            {
-                SubmitLocalScore(screen, replay);
-                IsSubmittingScore.Value = SubmitOnlineScore(screen, replay);
-            });
+            ThreadScheduler.Run(() => SubmitLocalScore(screen, replay));
+            ThreadScheduler.Run(() => IsSubmittingScore.Value = SubmitOnlineScore(screen, replay));
         }
 
         /// <summary>
@@ -690,12 +727,12 @@ namespace Quaver.Shared.Screens.Results
             // Calculate performance rating
             score.DifficultyProcessorVersion = DifficultyProcessorKeys.Version;
             score.RatingProcessorVersion = RatingProcessorKeys.Version;
-            score.PerformanceRating = processor.Failed ? 0 : new RatingProcessorKeys(Map.DifficultyFromMods(processor.Mods)).CalculateRating(rankedAccuracy);
+            score.PerformanceRating = processor.Failed ? 0 : new RatingProcessorKeys(screen.Map.SolveDifficulty(processor.Mods).OverallDifficulty).CalculateRating(rankedAccuracy);
             score.RankedAccuracy = rankedAccuracy;
 
             // Select proper local profile id to attach with this score for ranking
             if (UserProfileDatabaseCache.Selected.Value.Id != 0 && !UserProfileDatabaseCache.Selected.Value.IsOnline)
-                score.UserProfileId = UserProfileDatabaseCache.Selected.Value.Id;
+                score.LocalProfileId = UserProfileDatabaseCache.Selected.Value.Id;
 
             var scoreId = -1;
 
@@ -848,8 +885,7 @@ namespace Quaver.Shared.Screens.Results
 
             // Submit score to the server...
             OnlineManager.Client?.Submit(new OnlineScore(submissionMd5, replay, processor, scrollSpeed,
-                ModHelper.GetRateFromMods(ModManager.Mods), TimeHelper.GetUnixTimestampMilliseconds(),
-                SteamManager.PTicket));
+                ModHelper.GetRateFromMods(ModManager.Mods), Gameplay.TimePlayEnd, OnlineManager.CurrentGame));
 
             return true;
         }
@@ -860,6 +896,10 @@ namespace Quaver.Shared.Screens.Results
         /// <param name="e"></param>
         private void OnScoreSubmitted(object sender, ScoreSubmissionEventArgs e)
         {
+            // Hasn't submitted successfully yet.
+            if (e.Response == null)
+                return;
+
             IsSubmittingScore.Value = false;
             ScoreSubmissionStats.Value = e.Response;
             Logger.Important($"Received score submission response with status: {e.Response.Status}", LogType.Network);
@@ -911,8 +951,6 @@ namespace Quaver.Shared.Screens.Results
         {
             try
             {
-                DiscordHelper.Presence.Details = "Results Screen";
-                DiscordHelper.Presence.State = "In the menus";
                 DiscordHelper.Presence.PartySize = 0;
                 DiscordHelper.Presence.PartyMax = 0;
                 DiscordHelper.Presence.StartTimestamp = 0;
@@ -920,7 +958,8 @@ namespace Quaver.Shared.Screens.Results
                 DiscordHelper.Presence.LargeImageText = OnlineManager.GetRichPresenceLargeKeyText(ConfigManager.SelectedGameMode.Value);
                 DiscordHelper.Presence.SmallImageKey = ModeHelper.ToShortHand(ConfigManager.SelectedGameMode.Value).ToLower();
                 DiscordHelper.Presence.SmallImageText = ModeHelper.ToLongHand(ConfigManager.SelectedGameMode.Value);
-                DiscordRpc.UpdatePresence(ref DiscordHelper.Presence);
+
+                RichPresenceHelper.UpdateRichPresence("In the Menus", "Results Screen");
             }
             catch (Exception e)
             {

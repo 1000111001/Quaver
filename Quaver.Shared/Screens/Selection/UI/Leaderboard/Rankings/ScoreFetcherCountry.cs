@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using Quaver.API.Enums;
 using Quaver.Server.Client.Events.Scores;
+using Quaver.Server.Client.Structures;
 using Quaver.Shared.Config;
 using Quaver.Shared.Database.Maps;
 using Quaver.Shared.Database.Scores;
 using Quaver.Shared.Online;
-using Quaver.Shared.Screens.Select.UI.Leaderboard;
 using Wobble.Logging;
 
 namespace Quaver.Shared.Screens.Selection.UI.Leaderboard.Rankings
@@ -20,8 +20,8 @@ namespace Quaver.Shared.Screens.Selection.UI.Leaderboard.Rankings
                 if (!OnlineManager.Connected || !OnlineManager.IsDonator)
                     return new FetchedScoreStore(new List<Score>());
 
-                var onlineScores = OnlineManager.Client?.RetrieveOnlineScores(map.MapId, map.Md5Checksum, ModIdentifier.None,
-                    true, ModIdentifier.None, false, OnlineManager.ShouldFetchRealtimeLeaderboard);
+                var onlineScores = OnlineManager.Client?.RetrieveScoreboard(map.MapId, map.Md5Checksum, OnlineScoreboard.Country,
+                    0, OnlineManager.Self.OnlineUser.CountryFlag.ToUpper());
 
                 map.NeedsOnlineUpdate = onlineScores?.Code == OnlineScoresResponseCode.NeedsUpdate;
 

@@ -85,13 +85,9 @@ namespace Quaver.Shared.Screens.Initialization
         {
             Logger.Important($"Game initialization task complete!", LogType.Runtime);
 
-            QuaverScreenManager.ScheduleScreenChange(() =>
-            {
-                if (ConfigManager.SkipSplashScreen.Value)
-                    return new MainMenuScreen();
-
-                return new BetaScreen();
-            });
+#if !VISUAL_TESTS
+            QuaverScreenManager.ScheduleScreenChange(() => new MainMenuScreen());
+#endif
         }
 
         public override UserClientStatus GetClientStatus() => null;

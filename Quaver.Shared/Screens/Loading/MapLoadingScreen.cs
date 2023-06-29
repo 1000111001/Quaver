@@ -9,14 +9,13 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Quaver.API.Enums;
-using Quaver.API.Maps;
+using Quaver.API.Helpers;
 using Quaver.API.Replays;
-using Quaver.Server.Client.Handlers;
 using Quaver.Server.Common.Objects;
+using Quaver.Shared.Audio;
 using Quaver.Shared.Config;
 using Quaver.Shared.Database.Maps;
 using Quaver.Shared.Database.Scores;
-using Quaver.Shared.Graphics.Backgrounds;
 using Quaver.Shared.Graphics.Notifications;
 using Quaver.Shared.Modifiers;
 using Quaver.Shared.Modifiers.Mods;
@@ -24,15 +23,12 @@ using Quaver.Shared.Online;
 using Quaver.Shared.Scheduling;
 using Quaver.Shared.Screens.Gameplay;
 using Quaver.Shared.Screens.Multi;
-using Quaver.Shared.Screens.Multiplayer;
-using Quaver.Shared.Screens.Select;
 using Quaver.Shared.Screens.Selection;
 using Wobble;
 using Wobble.Audio;
 using Wobble.Audio.Tracks;
 using Wobble.Logging;
 using Wobble.Screens;
-using AudioEngine = Quaver.Shared.Audio.AudioEngine;
 
 namespace Quaver.Shared.Screens.Loading
 {
@@ -89,6 +85,7 @@ namespace Quaver.Shared.Screens.Loading
                 try
                 {
                     ParseAndLoadMap();
+                    WriteStreamerFiles();
                     LoadGameplayScreen();
                 }
                 catch (Exception e)
@@ -156,13 +153,33 @@ namespace Quaver.Shared.Screens.Loading
 
                 MapManager.Selected.Value.Qua.RandomizeLanes(seed);
             }
+        }
 
-            // Asynchronously write to a file for livestreamers the difficulty rating
-            using (var writer = File.CreateText(ConfigManager.TempDirectory + "/Now Playing/difficulty.txt"))
-                writer.Write($"{MapManager.Selected.Value.DifficultyFromMods(ModManager.Mods):0.00}");
+        /// <summary>
+        ///    Asynchronously writes files for livestreamers
+        /// </summary>
+        private static void WriteStreamerFiles()
+        {
+            var streamerValues = new[]
+            {
+                ("difficulty", $"{MapManager.Selected.Value.DifficultyFromMods(ModManager.Mods):0.00}"),
+                ("map", MapManager.Selected.Value.Qua + " "),
+                ("mods", ModHelper.GetModsString(ModManager.Mods)),
+                ("mapid", MapManager.Selected.Value.MapId.ToString())
+            };
 
-            using (var writer = File.CreateText(ConfigManager.TempDirectory + "/Now Playing/map.txt"))
-                writer.Write($"{MapManager.Selected.Value.Qua.Artist} - {MapManager.Selected.Value.Qua.Title} [{MapManager.Selected.Value.Qua.DifficultyName}] ");
+            foreach (var (fileName, value) in streamerValues)
+            {
+                try
+                {
+                    using (var writer = File.CreateText($"{ConfigManager.TempDirectory}/Now Playing/{fileName}.txt"))
+                        writer.Write(value);
+                }
+                catch (Exception e)
+                {
+                    Logger.Error(e, LogType.Runtime);
+                }
+            }
         }
 
         /// <summary>

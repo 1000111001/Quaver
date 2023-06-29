@@ -49,7 +49,8 @@ namespace Quaver.Shared.Database.Maps
             "zetoban - Flowering Night",
             "Plum - Fantasy Collision",
             "Lollipop - vibing oustide the supermarket at 1am",
-            "HyuN feat. Yuri - Disorder"
+            "HyuN feat. Yuri - Disorder",
+            "Rabbit House - Dead Rabbit And Witch's Blood"
         };
 
         /// <summary>
@@ -177,7 +178,7 @@ namespace Quaver.Shared.Database.Maps
                 try
                 {
                     var map = Map.FromQua(Qua.Parse(file, false), file);
-                    InsertMap(map, file);
+                    InsertMap(map);
 
                     if (!QuaverSettingsDatabaseCache.OutdatedMaps.Contains(map))
                         QuaverSettingsDatabaseCache.OutdatedMaps.Add(map);
@@ -207,8 +208,7 @@ namespace Quaver.Shared.Database.Maps
         ///     Inserts an individual map to the database.
         /// </summary>
         /// <param name="map"></param>
-        /// <param name="file"></param>
-        public static int InsertMap(Map map, string file)
+        public static int InsertMap(Map map)
         {
             try
             {
@@ -218,8 +218,27 @@ namespace Quaver.Shared.Database.Maps
             }
             catch (Exception e)
             {
-                Logger.Error(e, LogType.Runtime);
-                File.Delete(file);
+                var existing = DatabaseManager.Connection.Find<Map>(x => x.Md5Checksum == map.Md5Checksum);
+                if (existing == null)
+                {
+                    // Weird.
+                    Logger.Error(e, LogType.Runtime);
+                    return -1;
+                }
+
+                var newPath = Path.Combine(ConfigManager.SongDirectory.Value, map.Directory, map.Path);
+                var existingPath = Path.Combine(ConfigManager.SongDirectory.Value, existing.Directory, existing.Path);
+
+                if (existingPath != newPath)
+                {
+                    Logger.Warning($"Tried importing a duplicate of `{existingPath}` at `{newPath}`, deleting.", LogType.Runtime);
+                    // Delete the duplicate file.
+                    File.Delete(newPath);
+                    return -1;
+                }
+
+                // Do not delete if the path matches.
+                Logger.Warning($"Tried importing `{existingPath}` twice.", LogType.Runtime);
                 return -1;
             }
         }
@@ -278,7 +297,7 @@ namespace Quaver.Shared.Database.Maps
         /// <summary>
         ///     Fetches all maps, groups them into mapsets, sets them to allow them to be played.
         /// </summary>
-        public static void OrderAndSetMapsets()
+        public static void OrderAndSetMapsets(bool skipPlaylistLoad = false)
         {
             OtherGameMapDatabaseCache.Initialize();
 
@@ -291,7 +310,8 @@ namespace Quaver.Shared.Database.Maps
             MapManager.Mapsets = MapsetHelper.OrderMapsByDifficulty(MapsetHelper.OrderMapsetsByArtist(mapsets));
             MapManager.RecentlyPlayed = new List<Map>();
 
-            PlaylistManager.Load();
+            if(!skipPlaylistLoad)
+                PlaylistManager.Load();
 
             // Schedule maps that don't have difficulty ratings to recalculate.
             // If forcing a full recalculation due to diff calc updates, then the difficulty processor version should just be bumped
@@ -341,7 +361,7 @@ namespace Quaver.Shared.Database.Maps
 
                     if (map.Id == 0)
                     {
-                        map.Id = InsertMap(map, path);
+                        map.Id = InsertMap(map);
                     }
                     else
                     {

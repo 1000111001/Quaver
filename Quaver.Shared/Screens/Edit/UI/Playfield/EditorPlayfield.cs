@@ -5,21 +5,17 @@ using System.Threading;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using MoreLinq;
 using Quaver.API.Enums;
 using Quaver.API.Maps;
 using Quaver.API.Maps.Structures;
 using Quaver.Shared.Assets;
 using Quaver.Shared.Audio;
 using Quaver.Shared.Config;
-using Quaver.Shared.Database.Maps;
 using Quaver.Shared.Graphics;
 using Quaver.Shared.Graphics.Graphs;
-using Quaver.Shared.Graphics.Menu.Border;
 using Quaver.Shared.Helpers;
 using Quaver.Shared.Scheduling;
 using Quaver.Shared.Screens.Edit.Actions;
-using Quaver.Shared.Screens.Edit.Actions.HitObjects;
 using Quaver.Shared.Screens.Edit.Actions.HitObjects.Flip;
 using Quaver.Shared.Screens.Edit.Actions.HitObjects.Move;
 using Quaver.Shared.Screens.Edit.Actions.HitObjects.Place;
@@ -27,6 +23,8 @@ using Quaver.Shared.Screens.Edit.Actions.HitObjects.PlaceBatch;
 using Quaver.Shared.Screens.Edit.Actions.HitObjects.Remove;
 using Quaver.Shared.Screens.Edit.Actions.HitObjects.RemoveBatch;
 using Quaver.Shared.Screens.Edit.Actions.HitObjects.Resize;
+using Quaver.Shared.Screens.Edit.Actions.HitObjects.Resnap;
+using Quaver.Shared.Screens.Edit.Actions.HitObjects.Reverse;
 using Quaver.Shared.Screens.Edit.Actions.Timing.Add;
 using Quaver.Shared.Screens.Edit.Actions.Timing.AddBatch;
 using Quaver.Shared.Screens.Edit.Actions.Timing.ChangeBpm;
@@ -40,7 +38,6 @@ using Quaver.Shared.Screens.Edit.UI.Playfield.Seek;
 using Quaver.Shared.Screens.Edit.UI.Playfield.Timeline;
 using Quaver.Shared.Screens.Edit.UI.Playfield.Waveform;
 using Quaver.Shared.Screens.Edit.UI.Playfield.Zoom;
-using Quaver.Shared.Screens.Editor.UI.Rulesets.Keys;
 using Quaver.Shared.Screens.Results.UI.Tabs.Overview.Graphs.Footer;
 using Quaver.Shared.Skinning;
 using Wobble;
@@ -64,7 +61,7 @@ namespace Quaver.Shared.Screens.Edit.UI.Playfield
 
         /// <summary>
         /// </summary>
-        private EditorActionManager ActionManager { get; }
+        public EditorActionManager ActionManager { get; }
 
         /// <summary>
         /// </summary>
@@ -72,7 +69,7 @@ namespace Quaver.Shared.Screens.Edit.UI.Playfield
 
         /// <summary>
         /// </summary>
-        private IAudioTrack Track { get; }
+        public IAudioTrack Track { get; }
 
         /// <summary>
         /// </summary>
@@ -113,6 +110,14 @@ namespace Quaver.Shared.Screens.Edit.UI.Playfield
         /// <summary>
         /// </summary>
         private Bindable<bool> ShowWaveform { get; }
+
+        /// <summary>
+        /// </summary>
+        private Bindable<EditorPlayfieldWaveformAudioDirection> WaveFormAudioDirection { get; }
+
+        /// <summary>
+        /// </summary>
+        private Bindable<EditorPlayfieldWaveformFilter> WaveformFilter { get; }
 
         /// <summary>
         ///     If true, this playfield is unable to be edited/interacted with. This is purely for viewing
@@ -209,7 +214,7 @@ namespace Quaver.Shared.Screens.Edit.UI.Playfield
 
         /// <summary>
         /// </summary>
-        private EditorPlayfieldWaveform Waveform { get; set; }
+        public EditorPlayfieldWaveform Waveform { get; set; }
 
         /// <summary>
         /// </summary>
@@ -302,7 +307,9 @@ namespace Quaver.Shared.Screens.Edit.UI.Playfield
             BindableInt scrollSpeed, Bindable<bool> anchorHitObjectsAtMidpoint, Bindable<bool> scaleScrollSpeedWithRate,
             Bindable<EditorBeatSnapColor> beatSnapColor, Bindable<bool> viewLayers, Bindable<EditorCompositionTool> tool,
             BindableInt longNoteOpacity, BindableList<HitObjectInfo> selectedHitObjects, Bindable<EditorLayerInfo> selectedLayer,
-            EditorLayerInfo defaultLayer, Bindable<bool> placeObjectsOnNearestTick, Bindable<bool> showWaveform, bool isUneditable = false)
+            EditorLayerInfo defaultLayer, Bindable<bool> placeObjectsOnNearestTick, Bindable<bool> showWaveform,
+            Bindable<EditorPlayfieldWaveformAudioDirection> waveFormAudioDirection, Bindable<EditorPlayfieldWaveformFilter> waveformFilter,
+            bool isUneditable = false)
         {
             Map = map;
             ActionManager = manager;
@@ -322,9 +329,11 @@ namespace Quaver.Shared.Screens.Edit.UI.Playfield
             DefaultLayer = defaultLayer;
             PlaceObjectsOnNearestTick = placeObjectsOnNearestTick;
             ShowWaveform = showWaveform;
+            WaveFormAudioDirection = waveFormAudioDirection;
+            WaveformFilter = waveformFilter;
 
             Alignment = Alignment.TopCenter;
-            Tint = ColorHelper.HexToColor("#181818");
+            Tint = new Color(24,24,24);
             Size = new ScalableVector2(ColumnSize * Map.GetKeyCount(), WindowManager.Height);
 
             CreateBorders();
@@ -349,7 +358,9 @@ namespace Quaver.Shared.Screens.Edit.UI.Playfield
             ActionManager.HitObjectBatchRemoved += OnHitObjectBatchRemoved;
             ActionManager.HitObjectBatchPlaced += OnHitObjectBatchPlaced;
             ActionManager.HitObjectsFlipped += OnHitObjectsFlipped;
+            ActionManager.HitObjectsReversed += OnHitObjectsReversed;
             ActionManager.HitObjectsMoved += OnHitObjectsMoved;
+            ActionManager.HitObjectsResnapped += OnHitObjectsResnapped;
             ActionManager.TimingPointAdded += OnTimingPointAdded;
             ActionManager.TimingPointRemoved += OnTimingPointRemoved;
             ActionManager.TimingPointBatchAdded += OnTimingPointBatchAdded;
@@ -359,6 +370,8 @@ namespace Quaver.Shared.Screens.Edit.UI.Playfield
             ActionManager.TimingPointOffsetChanged += OnTimingPointOffsetChanged;
             ActionManager.TimingPointOffsetBatchChanged += OnTimingPointOffsetBatchChanged;
             Skin.ValueChanged += OnSkinChanged;
+            WaveFormAudioDirection.ValueChanged += OnWaveFormAudioDirectionChanged;
+            WaveformFilter.ValueChanged += OnWaveformFilterChanged;
         }
 
         /// <inheritdoc />
@@ -452,7 +465,9 @@ namespace Quaver.Shared.Screens.Edit.UI.Playfield
             ActionManager.HitObjectBatchRemoved -= OnHitObjectBatchRemoved;
             ActionManager.HitObjectBatchPlaced -= OnHitObjectBatchPlaced;
             ActionManager.HitObjectsFlipped -= OnHitObjectsFlipped;
+            ActionManager.HitObjectsReversed -= OnHitObjectsReversed;
             ActionManager.HitObjectsMoved -= OnHitObjectsMoved;
+            ActionManager.HitObjectsResnapped -= OnHitObjectsResnapped;
             ActionManager.TimingPointAdded -= OnTimingPointAdded;
             ActionManager.TimingPointRemoved -= OnTimingPointRemoved;
             ActionManager.TimingPointBatchAdded -= OnTimingPointBatchAdded;
@@ -462,6 +477,8 @@ namespace Quaver.Shared.Screens.Edit.UI.Playfield
             ActionManager.TimingPointOffsetChanged -= OnTimingPointOffsetChanged;
             ActionManager.TimingPointOffsetBatchChanged -= OnTimingPointOffsetBatchChanged;
             Skin.ValueChanged -= OnSkinChanged;
+            WaveFormAudioDirection.ValueChanged -= OnWaveFormAudioDirectionChanged;
+            WaveformFilter.ValueChanged -= OnWaveformFilterChanged;
 
             base.Destroy();
         }
@@ -538,7 +555,7 @@ namespace Quaver.Shared.Screens.Edit.UI.Playfield
 
         /// <summary>
         /// </summary>
-        private void CreateWaveform()
+        public void CreateWaveform()
         {
             if (IsUneditable)
                 return;
@@ -767,13 +784,7 @@ namespace Quaver.Shared.Screens.Edit.UI.Playfield
             // always go to the nearest backwards tick
             if (Math.Abs(fwdDiff - bwdDiff) <= 2)
             {
-                // Get the current timing point
-                var point = Map.GetTimingPointAt(time);
-
-                if (point == null)
-                    return time;
-
-                var snapTimePerBeat = 60000f / point.Bpm / beatSnap;
+                var snapTimePerBeat = 60000f / timingPoint.Bpm / beatSnap;
 
                 if (PlaceObjectsOnNearestTick.Value)
                     return (int) AudioEngine.GetNearestSnapTimeFromTime(Map, Direction.Backward, beatSnap, time + snapTimePerBeat);
@@ -983,12 +994,39 @@ namespace Quaver.Shared.Screens.Edit.UI.Playfield
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
+        private void OnHitObjectsReversed(object sender, EditorHitObjectsReversedEventArgs e)
+        {
+            if (IsUneditable)
+                return;
+
+            // Reverse changes the order of hit objects
+            HitObjects = HitObjects.OrderBy(x => x.Info.StartTime).ToList();
+            RefreshHitObjects();
+        }
+
+        /// <summary>
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void OnHitObjectsMoved(object sender, EditorHitObjectsMovedEventArgs e)
         {
             if (IsUneditable)
                 return;
 
             RefreshHitObjectBatch(e.HitObjects);
+        }
+
+        /// <summary>
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void OnHitObjectsResnapped(object sender, EditorActionHitObjectsResnappedEventArgs e)
+        {
+            if (IsUneditable)
+                return;
+
+            ResetObjectPositions();
+            InitializeHitObjectPool();
         }
 
         /// <summary>
@@ -1268,8 +1306,13 @@ namespace Quaver.Shared.Screens.Edit.UI.Playfield
             if (ho == null)
                 return;
 
+            if (SelectedHitObjects.Value.Contains(ho.Info))
+            {
+                ActionManager.EditScreen.DeleteSelectedObjects();
+                return;
+            }
+
             ActionManager.RemoveHitObject(ho.Info);
-            SelectedHitObjects.Remove(ho.Info);
         }
 
         /// <summary>
@@ -1431,7 +1474,7 @@ namespace Quaver.Shared.Screens.Edit.UI.Playfield
         /// <summary>
         /// </summary>
         /// <returns></returns>
-        private Vector2 GetRelativeMousePosition()
+        public Vector2 GetRelativeMousePosition()
         {
             var relativeY = HitPositionY - (int) GetTimeFromY(MouseManager.CurrentState.Y);
             return new Vector2(MouseManager.CurrentState.X, relativeY);
@@ -1461,6 +1504,19 @@ namespace Quaver.Shared.Screens.Edit.UI.Playfield
         {
             foreach (var ho in HitObjects)
                 ho.Refresh();
+        }
+
+        private void OnWaveformFilterChanged(object sender, BindableValueChangedEventArgs<EditorPlayfieldWaveformFilter> e)
+            => ReloadWaveform();
+
+        private void OnWaveFormAudioDirectionChanged(object sender,
+            BindableValueChangedEventArgs<EditorPlayfieldWaveformAudioDirection> e) => ReloadWaveform();
+
+        private void ReloadWaveform()
+        {
+            Waveform?.Destroy();
+            LoadingWaveform.FadeIn();
+            WaveformLoadTask.Run(0);
         }
     }
 }

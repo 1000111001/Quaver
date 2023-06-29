@@ -59,7 +59,7 @@ namespace Quaver.Shared.Screens.Main
         public MainMenuScreen()
         {
 #if  !VISUAL_TESTS
-            SetDiscordRichPresence();
+            SetRichPresence();
 #endif
             ModManager.RemoveSpeedMods();
 
@@ -91,7 +91,7 @@ namespace Quaver.Shared.Screens.Main
 
             GameBase.Game.GlobalUserInterface.Cursor.Show(1);
             GameBase.Game.GlobalUserInterface.Cursor.Alpha = 1;
-            
+
             base.OnFirstUpdate();
         }
 
@@ -113,6 +113,9 @@ namespace Quaver.Shared.Screens.Main
         /// <param name="gameTime"></param>
         private void HandleInput(GameTime gameTime)
         {
+            if (Exiting)
+                return;
+
             if (DialogManager.Dialogs.Count != 0)
                 return;
 
@@ -245,17 +248,19 @@ namespace Quaver.Shared.Screens.Main
 
         /// <summary>
         /// </summary>
-        private void SetDiscordRichPresence()
+        private void SetRichPresence()
         {
-            DiscordHelper.Presence.Details = "Main Menu";
-            DiscordHelper.Presence.State = "In the menus";
             DiscordHelper.Presence.PartySize = 0;
             DiscordHelper.Presence.PartyMax = 0;
             DiscordHelper.Presence.EndTimestamp = 0;
             DiscordHelper.Presence.LargeImageText = OnlineManager.GetRichPresenceLargeKeyText(ConfigManager.SelectedGameMode.Value);
             DiscordHelper.Presence.SmallImageKey = ModeHelper.ToShortHand(ConfigManager.SelectedGameMode.Value).ToLower();
             DiscordHelper.Presence.SmallImageText = ModeHelper.ToLongHand(ConfigManager.SelectedGameMode.Value);
-            DiscordRpc.UpdatePresence(ref DiscordHelper.Presence);
+
+            SteamManager.SetRichPresence("steam_player_group", null);
+            SteamManager.SetRichPresence("steam_player_group_size", null);
+
+            Helpers.RichPresenceHelper.UpdateRichPresence("In the menus", "Main Menu");
         }
 
         /// <inheritdoc />

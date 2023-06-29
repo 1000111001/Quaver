@@ -209,6 +209,11 @@ namespace Quaver.Shared.Database.Maps
         public bool HasScratchKey { get; set; }
 
         /// <summary>
+        ///     Retroactively fixed offset for ranked maps.
+        /// </summary>
+        public int OnlineOffset { get; set; }
+
+        /// <summary>
         ///    Returns the notes per second a map has
         /// </summary>
         [Ignore]
@@ -382,7 +387,7 @@ namespace Quaver.Shared.Database.Maps
                     break;
                 case MapGame.Osu:
                     var osu = new OsuBeatmap(MapManager.OsuSongsFolder + Directory + "/" + Path);
-                    qua = osu.ToQua();
+                    qua = osu.ToQua(checkValidity);
                     break;
                 case MapGame.Etterna:
                     var stepFile = new StepFile(Path).ToQuas();

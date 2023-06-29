@@ -1,13 +1,14 @@
 using System;
 using System.Collections.Generic;
 using Quaver.API.Enums;
+using Quaver.API.Helpers;
 using Quaver.Server.Client.Events.Scores;
+using Quaver.Server.Client.Structures;
 using Quaver.Shared.Config;
 using Quaver.Shared.Database.Maps;
 using Quaver.Shared.Database.Scores;
 using Quaver.Shared.Modifiers;
 using Quaver.Shared.Online;
-using Quaver.Shared.Screens.Select.UI.Leaderboard;
 using Wobble.Logging;
 
 namespace Quaver.Shared.Screens.Selection.UI.Leaderboard.Rankings
@@ -21,9 +22,14 @@ namespace Quaver.Shared.Screens.Selection.UI.Leaderboard.Rankings
                 if (!OnlineManager.Connected)
                     return new FetchedScoreStore(new List<Score>());
 
-                var onlineScores = OnlineManager.Client?.RetrieveOnlineScores(map.MapId, map.Md5Checksum, ModManager.Mods,
-                    false, ModIdentifier.None, false, OnlineManager.ShouldFetchRealtimeLeaderboard);
+                var mods = ModHelper.GetModsFromRate(ModHelper.GetRateFromMods(ModManager.Mods));
 
+                if (mods == ModIdentifier.None)
+                    mods = 0;
+
+                mods = ModManager.Mods - (long) mods;
+
+                var onlineScores = OnlineManager.Client?.RetrieveScoreboard(map.MapId, map.Md5Checksum, OnlineScoreboard.Mods, mods);
                 map.NeedsOnlineUpdate = onlineScores?.Code == OnlineScoresResponseCode.NeedsUpdate;
 
                 var scores = new List<Score>();

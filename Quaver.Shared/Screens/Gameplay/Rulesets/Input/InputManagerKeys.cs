@@ -89,7 +89,7 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Input
                     inputLane--;
 
                 // A key was uniquely pressed.
-                if (!BindingStore[lane].Pressed && (KeyboardManager.IsUniqueKeyPress(BindingStore[lane].Key.Value) &&
+                if (!BindingStore[lane].Pressed && (GenericKeyManager.IsUniquePress(BindingStore[lane].Key.Value) &&
                                                     !Ruleset.Screen.InReplayMode || Ruleset.Screen.InReplayMode && ReplayInputManager.UniquePresses[lane]))
                 {
                     // Update Replay Manager. Reset UniquePresses value for this lane.
@@ -104,7 +104,7 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Input
                     screenView.KpsDisplay.AddClick();
                 }
                 // A key was uniquely released.
-                else if (BindingStore[lane].Pressed && (KeyboardManager.IsUniqueKeyRelease(BindingStore[lane].Key.Value) &&
+                else if (BindingStore[lane].Pressed && (GenericKeyManager.IsUniqueRelease(BindingStore[lane].Key.Value) &&
                                                         !Ruleset.Screen.InReplayMode
                                                     || Ruleset.Screen.InReplayMode && ReplayInputManager.UniqueReleases[lane]))
                 {
@@ -149,7 +149,7 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Input
         /// <param name="manager"></param>
         /// <param name="gameplayHitObject"></param>
         /// <param name="objectIndex"></param>
-        private void HandleKeyPress(HitObjectManagerKeys manager, GameplayHitObjectKeys gameplayHitObject)
+        private void HandleKeyPress(HitObjectManagerKeys manager, GameplayHitObjectKeysInfo info)
         {
             // Play the HitSounds of closest hit object.
             var game = GameBase.Game as QuaverGame;
@@ -157,30 +157,31 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Input
             if (game?.CurrentScreen?.Type != QuaverScreenType.Editor)
             {
                 if (ConfigManager.EnableHitsounds.Value)
-                    HitObjectManager.PlayObjectHitSounds(gameplayHitObject.Info);
+                    HitObjectManager.PlayObjectHitSounds(info.HitObjectInfo);
                 if (ConfigManager.EnableKeysounds.Value)
-                    HitObjectManager.PlayObjectKeySounds(gameplayHitObject.Info);
+                    HitObjectManager.PlayObjectKeySounds(info.HitObjectInfo);
             }
 
             // Get Judgement and references
-            var time = (int)manager.CurrentAudioPosition;
-            var hitDifference = gameplayHitObject.Info.StartTime - time;
+            var time = (int)manager.CurrentAudioOffset;
+            var hitDifference = info.StartTime - time;
             var judgement = ((ScoreProcessorKeys)Ruleset.ScoreProcessor).CalculateScore(hitDifference, KeyPressType.Press, ReplayInputManager == null);
-            var lane = gameplayHitObject.Info.Lane - 1;
+            var lane = info.Lane - 1;
 
             // Ignore Ghost Taps
             if (judgement == Judgement.Ghost)
                 return;
 
             // Remove HitObject from Object Pool. Will be recycled/killed as necessary.
-            gameplayHitObject = manager.ActiveNoteLanes[lane].Dequeue();
+            // gameplayHitObject = manager.ActiveNoteLanes[lane].Dequeue();
+            manager.HitObjectQueueLanes[lane].Dequeue();
 
             // Update stats
             Ruleset.ScoreProcessor.Stats.Add(
                 new HitStat(
                     HitStatType.Hit,
                     KeyPressType.Press,
-                    gameplayHitObject.Info, time,
+                    info.HitObjectInfo, time,
                     judgement,
                     hitDifference,
                     Ruleset.ScoreProcessor.Accuracy,
@@ -195,52 +196,54 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Input
             // Update Playfield
             var playfield = (GameplayPlayfieldKeys)Ruleset.Playfield;
 
+            // Get hit burst lane
+            var judgementHitBurstLane = Math.Clamp(lane, 0, playfield.Stage.JudgementHitBursts.Count - 1);
+
             if (ReplayInputManager == null)
             {
                 playfield.Stage.ComboDisplay.MakeVisible();
-                playfield.Stage.HitError.AddJudgement(judgement, gameplayHitObject.Info.StartTime - time);
-                playfield.Stage.JudgementHitBurst.PerformJudgementAnimation(judgement);
+                playfield.Stage.HitError.AddJudgement(judgement, info.StartTime - time);
+                playfield.Stage.JudgementHitBursts[judgementHitBurstLane].PerformJudgementAnimation(judgement);
             }
 
             // Update Object Pooling
             switch (judgement)
             {
                 // Handle early miss cases here.
-                case Judgement.Miss when gameplayHitObject.Info.IsLongNote:
+                case Judgement.Miss when info.IsLongNote:
                     // Add another miss when hit missing LNS
                     ((ScoreProcessorKeys)Ruleset.ScoreProcessor).CalculateScore(Judgement.Miss, true);
                     Ruleset.ScoreProcessor.Stats.Add(
                         new HitStat(
                             HitStatType.Miss,
                             KeyPressType.Press,
-                            gameplayHitObject.Info, time,
+                            info.HitObjectInfo, time,
                             Judgement.Miss,
                             time,
                             Ruleset.ScoreProcessor.Accuracy,
                             Ruleset.ScoreProcessor.Health
                         ));
 
-
                     view.UpdateScoreboardUsers();
                     view.UpdateScoreAndAccuracyDisplays();
-                    playfield.Stage.JudgementHitBurst.PerformJudgementAnimation(Judgement.Miss);
+                    playfield.Stage.JudgementHitBursts[judgementHitBurstLane].PerformJudgementAnimation(Judgement.Miss);
 
-                    manager.KillPoolObject(gameplayHitObject);
+                    info.State = HitObjectState.Dead;
                     break;
                 // Handle miss cases.
                 case Judgement.Miss:
-                    manager.RecyclePoolObject(gameplayHitObject);
+                    info.State = HitObjectState.Removed;
                     break;
                 // Handle non-miss cases. Perform Hit Lighting Animation and Handle Object pooling.
                 default:
-                    playfield.Stage.HitLightingObjects[lane].PerformHitAnimation(gameplayHitObject.Info.IsLongNote, judgement);
-                    if (gameplayHitObject.Info.IsLongNote)
+                    playfield.Stage.HitLightingObjects[lane].PerformHitAnimation(info.IsLongNote, judgement);
+                    if (info.IsLongNote)
                     {
-                        manager.ChangePoolObjectStatusToHeld(gameplayHitObject);
-                        gameplayHitObject.StartLongNoteAnimation();
+                        manager.ChangeHitObjectToHeld(info);
+                        info.HitObject?.StartLongNoteAnimation();
                     }
                     else
-                        manager.RecyclePoolObject(gameplayHitObject);
+                        info.State = HitObjectState.Removed;
                     break;
             }
         }
@@ -248,25 +251,28 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Input
         /// <summary>
         ///     Handles an individual key release during gameplay.
         /// </summary>
-        private void HandleKeyRelease(HitObjectManagerKeys manager, GameplayHitObjectKeys gameplayHitObject)
+        private void HandleKeyRelease(HitObjectManagerKeys manager, GameplayHitObjectKeysInfo info)
         {
             // Get judgement and references
-            var lane = gameplayHitObject.Info.Lane - 1;
+            var lane = info.Lane - 1;
             var playfield = (GameplayPlayfieldKeys)Ruleset.Playfield;
-            var time = (int)manager.CurrentAudioPosition;
-            var hitDifference = manager.HeldLongNoteLanes[lane].Peek().Info.EndTime - time;
+            var time = (int)manager.CurrentAudioOffset;
+            var hitDifference = info.EndTime - time;
 
             var judgement = ((ScoreProcessorKeys)Ruleset.ScoreProcessor).CalculateScore(hitDifference, KeyPressType.Release,
                 ReplayInputManager == null);
 
             // Update animations
             playfield.Stage.HitLightingObjects[lane].StopHolding();
-            gameplayHitObject.StopLongNoteAnimation();
+            info.HitObject?.StopLongNoteAnimation();
 
             // Dequeue from pool
-            gameplayHitObject = manager.HeldLongNoteLanes[lane].Dequeue();
+            manager.HeldLongNoteLanes[lane].Dequeue();
 
             var view = (GameplayScreenView) Ruleset.Screen.View;
+
+            // Get hit burst lane
+            var judgementHitBurstLane = Math.Clamp(lane, 0, playfield.Stage.JudgementHitBursts.Count - 1);
 
             // If LN has been released during a window
             if (judgement != Judgement.Ghost)
@@ -276,7 +282,7 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Input
                     new HitStat(
                         HitStatType.Hit,
                         KeyPressType.Release,
-                        gameplayHitObject.Info,
+                        info.HitObjectInfo,
                         time,
                         judgement,
                         hitDifference,
@@ -292,30 +298,32 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Input
                 if (ReplayInputManager == null)
                 {
                     playfield.Stage.ComboDisplay.MakeVisible();
-                    playfield.Stage.HitError.AddJudgement(judgement, gameplayHitObject.Info.EndTime - time);
-                    playfield.Stage.JudgementHitBurst.PerformJudgementAnimation(judgement);
+                    playfield.Stage.HitError.AddJudgement(judgement, info.EndTime - time);
+                    playfield.Stage.JudgementHitBursts[judgementHitBurstLane].PerformJudgementAnimation(judgement);
                 }
+
+                // play hitlighting animation on release
+                if (info.IsLongNote)
+                    playfield.Stage.HitLightingObjects[lane].PerformHitAnimation(false, judgement);
 
                 // If the player recieved an early miss or "okay",
                 // show the player that they were inaccurate by killing the object instead of recycling it
                 if (judgement == Judgement.Miss || judgement == Judgement.Okay)
-                    manager.KillHoldPoolObject(gameplayHitObject, judgement == Judgement.Miss);
+                    info.State = HitObjectState.Dead;
                 else
-                    manager.RecyclePoolObject(gameplayHitObject);
+                    info.State = HitObjectState.Removed;
 
                 return;
             }
 
             // If LN has been released early
-            // Judgement for when the player releases too early
-            const Judgement missedJudgement = Judgement.Miss;
 
             // Add new hit stat data and update score
             Ruleset.ScoreProcessor.Stats.Add(
                 new HitStat(
                     HitStatType.Hit,
                     KeyPressType.Release,
-                    gameplayHitObject.Info,
+                    info.HitObjectInfo,
                     time,
                     Judgement.Miss,
                     hitDifference,
@@ -324,7 +332,7 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Input
             ));
 
             if (ReplayInputManager == null)
-                Ruleset.ScoreProcessor.CalculateScore(missedJudgement, true);
+                Ruleset.ScoreProcessor.CalculateScore(Judgement.Miss, true);
 
             // Update scoreboard
             view.UpdateScoreboardUsers();
@@ -332,10 +340,10 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Input
 
             // Perform hit burst animation
             if (ReplayInputManager == null)
-                playfield.Stage.JudgementHitBurst.PerformJudgementAnimation(Judgement.Miss);
+                playfield.Stage.JudgementHitBursts[judgementHitBurstLane].PerformJudgementAnimation(Judgement.Miss);
 
             // Update Object Pool
-            manager.KillHoldPoolObject(gameplayHitObject);
+            info.State = HitObjectState.Dead;
         }
 
         /// <summary>
@@ -371,8 +379,8 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Input
             else if (KeyboardManager.IsUniqueKeyPress(ConfigManager.KeyDecreaseScrollSpeed.Value))
                 scrollSpeed.Value -= speedIncrease;
 
-            NotificationManager.Show(NotificationLevel.Info, $"Scroll speed has been changed to: {scrollSpeed.Value / 10f:0.0}");
-            ((HitObjectManagerKeys)Ruleset.HitObjectManager).ForceUpdateLNSize();
+            NotificationManager.Show(NotificationLevel.Info, $"Scroll speed has been changed to: {scrollSpeed.Value / 10f:0.0}",
+                null, true);
         }
 
         /// <summary>

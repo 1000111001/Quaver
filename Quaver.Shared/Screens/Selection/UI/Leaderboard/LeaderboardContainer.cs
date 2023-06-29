@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Xna.Framework;
+using Quaver.API.Enums;
+using Quaver.API.Maps.Processors.Rating;
 using Quaver.Server.Client;
 using Quaver.Shared.Assets;
 using Quaver.Shared.Config;
@@ -12,9 +14,10 @@ using Quaver.Shared.Graphics;
 using Quaver.Shared.Helpers;
 using Quaver.Shared.Modifiers;
 using Quaver.Shared.Online;
-using Quaver.Shared.Screens.Select.UI.Leaderboard;
 using Quaver.Shared.Screens.Selection.UI.Leaderboard.Components;
 using Quaver.Shared.Screens.Selection.UI.Leaderboard.Rankings;
+using Quaver.Shared.Screens.Selection.UI.Leaderboard.Rankings.Quaver.Shared.Screens.Selection.UI.Leaderboard.Rankings;
+using Quaver.Shared.Skinning;
 using WebSocketSharp;
 using Wobble.Bindables;
 using Wobble.Graphics;
@@ -153,6 +156,7 @@ namespace Quaver.Shared.Screens.Selection.UI.Leaderboard
             {
                 Parent = this,
                 Alignment = Alignment.TopLeft,
+                Tint = SkinManager.Skin?.SongSelect?.LeaderboardTitleColor ?? Color.White
             };
         }
 
@@ -180,7 +184,7 @@ namespace Quaver.Shared.Screens.Selection.UI.Leaderboard
                 Alignment = Alignment.TopLeft,
                 Y = Header.Y + Header.Height + 8,
                 Size = new ScalableVector2(Width,664),
-                Image = UserInterface.LeaderboardScoresPanel,
+                Image = SkinManager.Skin?.SongSelect?.LeaderboardPanel ?? UserInterface.LeaderboardScoresPanel,
                 AutoScaleHeight = true
             };
 
@@ -199,7 +203,8 @@ namespace Quaver.Shared.Screens.Selection.UI.Leaderboard
             PersonalBestHeader = new SpriteTextPlus(Header.Font, "PERSONAL BEST", Header.FontSize)
             {
                 Parent = this,
-                Y = ScoresContainerBackground.Y + ScoresContainerBackground.Height + 28
+                Y = ScoresContainerBackground.Y + ScoresContainerBackground.Height + 28,
+                Tint = SkinManager.Skin?.SongSelect?.PersonalBestTitleColor ?? Color.White
             };
         }
 
@@ -214,7 +219,7 @@ namespace Quaver.Shared.Screens.Selection.UI.Leaderboard
                 Alignment = Alignment.TopRight,
                 Size = new ScalableVector2(25, 25),
                 Image = FontAwesome.Get(FontAwesomeIcon.fa_trophy),
-                Tint = ColorHelper.HexToColor("#E9B736"),
+                Tint = SkinManager.Skin?.SongSelect?.PersonalBestTrophyColor ?? ColorHelper.HexToColor("#E9B736"),
                 Alpha = 0
             };
         }
@@ -228,7 +233,8 @@ namespace Quaver.Shared.Screens.Selection.UI.Leaderboard
                 Parent = this,
                 Y = PersonalBestTrophy.Y - 3,
                 Alignment = Alignment.TopRight,
-                Alpha = 0
+                Alpha = 0,
+                Tint = SkinManager.Skin?.SongSelect?.PersonalBestRankColor ?? Color.White
             };
         }
 
@@ -288,14 +294,20 @@ namespace Quaver.Shared.Screens.Selection.UI.Leaderboard
                 case LeaderboardType.Friends:
                     scores = new ScoreFetcherFriends().Fetch(map);
                     break;
+                case LeaderboardType.All:
+                    scores = new ScoreFetcherAll().Fetch(map);
+                    break;
                 default:
                     scores = new FetchedScoreStore();
                     break;
             }
 
             // Set scores to use during gameplay
-            if (OnlineManager.CurrentGame == null)
-                MapManager.Selected.Value.Scores.Value = scores.Scores;
+            if (OnlineManager.CurrentGame != null)
+                return scores;
+
+            MapManager.Selected.Value.Scores.Value = scores.Scores;
+            ScoresHelper.SetRatingProcessors(MapManager.Selected.Value.Scores.Value);
 
             return scores;
         }

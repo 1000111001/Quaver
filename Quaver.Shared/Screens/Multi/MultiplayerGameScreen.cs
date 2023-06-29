@@ -75,6 +75,9 @@ namespace Quaver.Shared.Screens.Multi
                 if (DontLeaveGameUponScreenSwitch)
                     return;
 
+                SteamManager.SetRichPresence("steam_player_group", null);
+                SteamManager.SetRichPresence("steam_player_group_size", null);
+
                 OnlineManager.LeaveGame();
             };
 
@@ -214,6 +217,9 @@ namespace Quaver.Shared.Screens.Multi
         /// </summary>
         private void HandleInput()
         {
+            if (Exiting)
+                return;
+
             if (DialogManager.Dialogs.Count != 0)
                 return;
 
@@ -244,6 +250,7 @@ namespace Quaver.Shared.Screens.Multi
                 SelectionScreen.HandleKeyPressTab();
 
             HandleKeyPressControlInput();
+            HandleKeyPressAltInput();
         }
 
         /// <summary>
@@ -251,8 +258,7 @@ namespace Quaver.Shared.Screens.Multi
         /// </summary>
         private void HandleKeyPressControlInput()
         {
-            if (!KeyboardManager.CurrentState.IsKeyDown(Keys.LeftControl) &&
-                !KeyboardManager.CurrentState.IsKeyDown(Keys.RightControl))
+            if (!KeyboardManager.IsCtrlDown() || KeyboardManager.IsAltDown())
                 return;
 
             // Increase rate.
@@ -265,6 +271,31 @@ namespace Quaver.Shared.Screens.Multi
                 // Decrease Rate
                 if (KeyboardManager.IsUniqueKeyPress(ConfigManager.KeyDecreaseGameplayAudioRate.Value))
                     ModManager.AddSpeedMods(SelectionScreen.GetNextRate(false, KeyboardManager.IsShiftDown()));
+            }
+        }
+
+        /// <summary>
+        ///     Handles when the user holds ALT down and performs input actions
+        /// </summary>
+        private void HandleKeyPressAltInput()
+        {
+            if (!KeyboardManager.IsAltDown())
+                return;
+
+            if (MapManager.Selected.Value != null)
+            {
+                var offsetChange = KeyboardManager.IsCtrlDown() ? 1 : 5;
+
+                if (KeyboardManager.IsUniqueKeyPress(ConfigManager.KeyIncreaseMapOffset.Value))
+                {
+                    MapManager.Selected.Value.LocalOffset += offsetChange;
+                    HandleOffsetChange();
+                }
+                else if (KeyboardManager.IsUniqueKeyPress(ConfigManager.KeyDecreaseMapOffset.Value))
+                {
+                    MapManager.Selected.Value.LocalOffset -= offsetChange;
+                    HandleOffsetChange();
+                }
             }
         }
 
@@ -310,14 +341,30 @@ namespace Quaver.Shared.Screens.Multi
 
         /// <summary>
         /// </summary>
+        private void HandleOffsetChange()
+        {
+            var map = MapManager.Selected.Value;
+
+            if (map == null)
+                return;
+
+            NotificationManager.Show(NotificationLevel.Info, $"Local map offset changed to: {map.LocalOffset} ms");
+            MapDatabaseCache.UpdateMap(map);
+        }
+
+        /// <summary>
+        /// </summary>
         private void SetRichPresence()
         {
-            DiscordHelper.Presence.Details = "Waiting to Start";
-            DiscordHelper.Presence.State = $"{Game.Value.Name} ({Game.Value.PlayerIds.Count} of {Game.Value.MaxPlayers})";
+            // Friend Grouping of Steam's Enhanced Rich Presence
+            SteamManager.SetRichPresence("steam_player_group", Game.Value.GameId.ToString());
+            SteamManager.SetRichPresence("steam_player_group_size", Game.Value.PlayerIds.Count.ToString());
+
             DiscordHelper.Presence.LargeImageText = OnlineManager.GetRichPresenceLargeKeyText(ConfigManager.SelectedGameMode.Value);
             DiscordHelper.Presence.SmallImageKey = ModeHelper.ToShortHand(ConfigManager.SelectedGameMode.Value).ToLower();
             DiscordHelper.Presence.SmallImageText = ModeHelper.ToLongHand(ConfigManager.SelectedGameMode.Value);
-            DiscordRpc.UpdatePresence(ref DiscordHelper.Presence);
+
+            RichPresenceHelper.UpdateRichPresence($"{Game.Value.Name} ({Game.Value.PlayerIds.Count} of {Game.Value.MaxPlayers})", "Waiting to Start");
         }
 
         /// <summary>

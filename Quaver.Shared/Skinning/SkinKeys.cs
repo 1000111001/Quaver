@@ -168,6 +168,10 @@ namespace Quaver.Shared.Skinning
         [FixedScale]
         internal float JudgementBurstPosY { get; private set; }
 
+        internal bool DisplayJudgementsInEachColumn { get; private set; }
+
+        internal bool RotateJudgements { get; private set; }
+
         [FixedScale]
         internal float HitErrorPosX { get; private set; }
 
@@ -196,12 +200,28 @@ namespace Quaver.Shared.Skinning
         [FixedScale]
         internal float SongTimeProgressScale { get; private set; }
 
+        internal bool SongTimeProgressPositionAtTop { get; private set; }
+
         internal float JudgementCounterAlpha { get; private set; }
 
         internal Color JudgementCounterFontColor { get; private set; }
 
+        internal bool UseJudgementColorForNumbers { get; private set; }
+
         [FixedScale]
         internal float JudgementCounterSize { get; private set; }
+
+        [FixedScale]
+        internal float JudgementCounterPosX { get; private set; }
+
+        [FixedScale]
+        internal float JudgementCounterPosY { get; private set; }
+
+        internal float JudgementCounterPadding { get; private set; }
+
+        internal bool JudgementCounterHorizontal { get; private set; }
+
+        internal bool JudgementCounterFadeToAlpha { get; private set; }
 
         internal bool DrawLongNoteEnd { get; private set; }
 
@@ -363,7 +383,7 @@ namespace Quaver.Shared.Skinning
         {
             Store = store;
             Mode = mode;
-            DefaultSkin = ConfigManager.DefaultSkin?.Value.ToString() ?? DefaultSkins.Arrow.ToString();
+            DefaultSkin = ConfigManager.DefaultSkin?.Value.ToString() ?? DefaultSkins.Bar.ToString();
 
             // Set the generic config variables, and THEN try to read from
             // skin.ini.
@@ -467,6 +487,8 @@ namespace Quaver.Shared.Skinning
             ComboPosX = ConfigHelper.ReadInt32((int) ComboPosX, ini["ComboPosX"]);
             ComboPosY = ConfigHelper.ReadInt32((int) ComboPosY, ini["ComboPosY"]);
             JudgementBurstPosY = ConfigHelper.ReadInt32((int) JudgementBurstPosY, ini["JudgementBurstPosY"]);
+            DisplayJudgementsInEachColumn = ConfigHelper.ReadBool(DisplayJudgementsInEachColumn, ini["DisplayJudgementsInEachColumn"]);
+            RotateJudgements = ConfigHelper.ReadBool(RotateJudgements, ini["RotateJudgements"]);
             HealthBarType = ConfigHelper.ReadEnum(HealthBarType, ini["HealthBarType"]);
             HealthBarKeysAlignment = ConfigHelper.ReadEnum(HealthBarKeysAlignment, ini["HealthBarKeysAlignment"]);
             HealthBarScale = ConfigHelper.ReadInt32((int) HealthBarScale, ini["HealthBarScale"]);
@@ -479,7 +501,13 @@ namespace Quaver.Shared.Skinning
             SongTimeProgressActiveColor = ConfigHelper.ReadColor(SongTimeProgressActiveColor, ini["SongTimeProgressActiveColor"]);
             JudgementCounterAlpha = ConfigHelper.ReadFloat(JudgementCounterAlpha, ini["JudgementCounterAlpha"]);
             JudgementCounterFontColor = ConfigHelper.ReadColor(JudgementCounterFontColor, ini["JudgementCounterFontColor"]);
+            UseJudgementColorForNumbers = ConfigHelper.ReadBool(UseJudgementColorForNumbers, ini["UseJudgementColorForNumbers"]);
             JudgementCounterSize = ConfigHelper.ReadInt32((int) JudgementCounterSize, ini["JudgementCounterSize"]);
+            JudgementCounterPosX = ConfigHelper.ReadInt32((int) JudgementCounterPosX, ini["JudgementCounterPosX"]);
+            JudgementCounterPosY = ConfigHelper.ReadInt32((int) JudgementCounterPosY, ini["JudgementCounterPosY"]);
+            JudgementCounterPadding = ConfigHelper.ReadInt32((int) JudgementCounterPadding, ini["JudgementCounterPadding"]);
+            JudgementCounterHorizontal = ConfigHelper.ReadBool(JudgementCounterHorizontal, ini["JudgementCounterHorizontal"]);
+            JudgementCounterFadeToAlpha = ConfigHelper.ReadBool(JudgementCounterFadeToAlpha, ini["JudgementCounterFadeToAlpha"]);
             DrawLongNoteEnd = ConfigHelper.ReadBool(DrawLongNoteEnd, ini["DrawLongNoteEnd"]);
             ScoreDisplayScale = ConfigHelper.ReadInt32((int) ScoreDisplayScale, ini["ScoreDisplayScale"]);
             RatingDisplayScale = ConfigHelper.ReadInt32((int) RatingDisplayScale, ini["RatingDisplayScale"]);
@@ -487,6 +515,7 @@ namespace Quaver.Shared.Skinning
             ComboDisplayScale = ConfigHelper.ReadInt32((int) ComboDisplayScale, ini["ComboDisplayScale"]);
             KpsDisplayScale = ConfigHelper.ReadInt32((int) KpsDisplayScale, ini["KpsDisplayScale"]);
             SongTimeProgressScale = ConfigHelper.ReadInt32((int) SongTimeProgressScale, ini["SongTimeProgressScale"]);
+            SongTimeProgressPositionAtTop = ConfigHelper.ReadBool(SongTimeProgressPositionAtTop, ini["SongTimeProgressPositionAtTop"]);
             DeadNoteColor = ConfigHelper.ReadColor(DeadNoteColor, ini["DeadNoteColor"]);
             BattleRoyaleAlertPosX = ConfigHelper.ReadInt32((int) BattleRoyaleAlertPosX, ini["BattleRoyaleAlertPosX"]);
             BattleRoyaleAlertPosY = ConfigHelper.ReadInt32((int) BattleRoyaleAlertPosY, ini["BattleRoyaleAlertPosY"]);
@@ -559,7 +588,7 @@ namespace Quaver.Shared.Skinning
             }
 
             var folderName = shared ? folder.ToString() : $"/{ModeHelper.ToShortHand(Mode).ToLower()}/{folder.ToString()}";
-            return SkinStore.LoadSingleTexture($"{SkinStore.Dir}/{folderName}/{element}", resource);
+            return SkinStore.LoadSingleTexture($"{Store.Dir}/{folderName}/{element}", resource);
         }
 
         /// <summary>
@@ -586,7 +615,7 @@ namespace Quaver.Shared.Skinning
             }
 
             var folderName = shared ? folder.ToString() : $"/{ModeHelper.ToShortHand(Mode).ToLower()}/{folder.ToString()}/";
-            return SkinStore.LoadSpritesheet(folderName, element, resource, rows, columns, extension);
+            return Store.LoadSpritesheet(folderName, element, resource, rows, columns, extension);
         }
 
         /// <summary>

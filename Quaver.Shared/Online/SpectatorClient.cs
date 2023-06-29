@@ -53,6 +53,11 @@ namespace Quaver.Shared.Online
         private bool HasNotifiedForThisMap { get; set; }
 
         /// <summary>
+        ///     If the user has finished playing the map that they were playing
+        /// </summary>
+        public bool FinishedPlayingMap { get; private set; }
+
+        /// <summary>
         /// </summary>
         /// <param name="player"></param>
         public SpectatorClient(User player) => Player = player;
@@ -65,15 +70,23 @@ namespace Quaver.Shared.Online
         /// <summary>
         ///     Handles when the client is beginning to play a new map
         /// </summary>
-        private void PlayNewMap(List<ReplayFrame> frames, bool createNewReplay = true, bool forceIfImporting = false)
+        public void PlayNewMap(List<ReplayFrame> frames, bool createNewReplay = true, bool forceIfImporting = false)
         {
             var game = (QuaverGame) GameBase.Game;
 
             if (createNewReplay)
             {
+                FinishedPlayingMap = false;
+
+                var mods = (ModIdentifier) Player.CurrentStatus.Modifiers;
+
+                // Get correct modifiers if in the tournament viewer
+                if (OnlineManager.CurrentGame != null)
+                    mods = OnlineManager.GetUserActivatedMods(Player.OnlineUser.Id, OnlineManager.CurrentGame);
+
                 // Create the new replay first, when playing a new map, we always want to start off with a fresh replay
                 Replay = new Replay((GameMode) Player.CurrentStatus.GameMode, Player.OnlineUser.Username,
-                    (ModIdentifier) Player.CurrentStatus.Modifiers, Player.CurrentStatus.MapMd5);
+                    mods, Player.CurrentStatus.MapMd5);
 
                 // Add all existing frames
                 if (frames != null)
@@ -158,6 +171,9 @@ namespace Quaver.Shared.Online
                 {
                     // Do nothing for now
                     case SpectatorClientStatus.SelectingSong:
+                        break;
+                    case SpectatorClientStatus.FinishedSong:
+                        FinishedPlayingMap = true;
                         break;
                     case SpectatorClientStatus.NewSong:
                         Replay.Frames.Clear();

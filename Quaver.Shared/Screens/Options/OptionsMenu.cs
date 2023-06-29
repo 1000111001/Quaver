@@ -18,6 +18,7 @@ using Wobble.Bindables;
 using Wobble.Graphics;
 using Wobble.Graphics.Sprites;
 using Wobble.Graphics.UI.Buttons;
+using Wobble.Input;
 
 namespace Quaver.Shared.Screens.Options
 {
@@ -29,7 +30,7 @@ namespace Quaver.Shared.Screens.Options
 
         /// <summary>
         /// </summary>
-        private Bindable<string> CurrentSearchQuery { get; } = new Bindable<string>("") { Value = ""};
+        private Bindable<string> CurrentSearchQuery { get; } = new Bindable<string>("") {Value = ""};
 
         /// <summary>
         /// </summary>
@@ -57,7 +58,7 @@ namespace Quaver.Shared.Screens.Options
 
         /// <summary>
         /// </summary>
-        public Bindable<bool> IsKeybindFocused { get; } = new Bindable<bool>(false) { Value =  false };
+        public Bindable<bool> IsKeybindFocused { get; } = new Bindable<bool>(false) {Value = false};
 
         /// <summary>
         /// </summary>
@@ -103,6 +104,18 @@ namespace Quaver.Shared.Screens.Options
             CurrentSearchQuery?.Dispose();
             IsKeybindFocused?.Dispose();
 
+            // Make sure to destroy everything that's not visible
+            foreach (var section in Sections)
+            {
+                foreach (var subcategory in section.Subcategories)
+                {
+                    foreach (var item in subcategory.Items)
+                    {
+                        item.Destroy();
+                    }
+                }
+            }
+
             base.Destroy();
         }
 
@@ -126,7 +139,7 @@ namespace Quaver.Shared.Screens.Options
                     {
                         new OptionsItemFrameLimiter(containerRect, "Frame Limiter")
                         {
-                            Tags = new List<string> { "fps", "limited", "unlimited", "vsync", "wayland"}
+                            Tags = new List<string> {"fps", "limited", "unlimited", "vsync", "wayland"}
                         },
                         new OptionsItemCheckbox(containerRect, "Display FPS Counter", ConfigManager.FpsCounter),
                         new OptionsItemCheckbox(containerRect, "Lower FPS On Inactive Window", ConfigManager.LowerFpsOnWindowInactive),
@@ -136,12 +149,16 @@ namespace Quaver.Shared.Screens.Options
                     {
                         new OptionsItemCheckbox(containerRect, "Prefer Wayland", ConfigManager.PreferWayland)
                         {
-                            Tags = new List<string> { "linux" }
+                            Tags = new List<string> {"linux"}
                         }
                     })
                 }),
                 new OptionsSection("Audio", UserInterface.OptionsAudio, new List<OptionsSubcategory>
                 {
+                    new OptionsSubcategory("Output", new List<OptionsItem>()
+                    {
+                        new OptionsItemAudioOutputDevice(containerRect, "Audio Output Device")
+                    }),
                     new OptionsSubcategory("Volume", new List<OptionsItem>()
                     {
                         new OptionsSlider(containerRect, "Master Volume", ConfigManager.VolumeGlobal),
@@ -159,10 +176,10 @@ namespace Quaver.Shared.Screens.Options
                     }),
                     new OptionsSubcategory("Effects", new List<OptionsItem>()
                     {
-                       new OptionsItemCheckbox(containerRect, "Pitch Audio With Playback Rate", ConfigManager.Pitched)
-                       {
-                           Tags = new List<string> { "speed" }
-                       }
+                        new OptionsItemCheckbox(containerRect, "Pitch Audio With Playback Rate", ConfigManager.Pitched)
+                        {
+                            Tags = new List<string> {"speed"}
+                        }
                     }),
                     new OptionsSubcategory("Experimental", new List<OptionsItem>()
                     {
@@ -184,7 +201,7 @@ namespace Quaver.Shared.Screens.Options
                     }),
                     new OptionsSubcategory("Background", new List<OptionsItem>()
                     {
-                       new OptionsSlider(containerRect, "Background Brightness", ConfigManager.BackgroundBrightness),
+                        new OptionsSlider(containerRect, "Background Brightness", ConfigManager.BackgroundBrightness),
                     }),
                     new OptionsSubcategory("Sound", new List<OptionsItem>()
                     {
@@ -194,11 +211,13 @@ namespace Quaver.Shared.Screens.Options
                     new OptionsSubcategory("Input", new List<OptionsItem>()
                     {
                         new OptionsItemCheckbox(containerRect, "Enable Tap To Pause", ConfigManager.TapToPause),
+                        new OptionsItemCheckbox(containerRect, "Enable Tap To Restart", ConfigManager.TapToRestart),
                         new OptionsItemCheckbox(containerRect, "Skip Results Screen After Quitting", ConfigManager.SkipResultsScreenAfterQuit)
                     }),
                     new OptionsSubcategory("User Interface", new List<OptionsItem>()
                     {
                         new OptionsItemCheckbox(containerRect, "Display Gameplay Overlay (Shift + F6)", ConfigManager.DisplayGameplayOverlay),
+                        new OptionsItemCheckbox(containerRect, "Display Notifications During Gameplay", ConfigManager.DisplayNotificationsInGameplay),
                         new OptionsItemCheckbox(containerRect, "Show Spectators", ConfigManager.ShowSpectators),
                         new OptionsItemCheckbox(containerRect, "Display Timing Lines", ConfigManager.DisplayTimingLines),
                         new OptionsItemCheckbox(containerRect, "Display Judgement Counter", ConfigManager.DisplayJudgementCounter),
@@ -219,16 +238,11 @@ namespace Quaver.Shared.Screens.Options
                     }),
                     new OptionsSubcategory("Lane Cover", new List<OptionsItem>()
                     {
-                       new OptionsItemCheckbox(containerRect, "Enable Top Lane Cover", ConfigManager.LaneCoverTop),
-                       new OptionsSlider(containerRect, "Top Lane Cover Height", ConfigManager.LaneCoverTopHeight),
-                       new OptionsItemCheckbox(containerRect, "Enable Bottom Lane Cover", ConfigManager.LaneCoverBottom),
-                       new OptionsSlider(containerRect, "Bottom Lane Cover Height", ConfigManager.LaneCoverBottomHeight),
-                       new OptionsItemCheckbox(containerRect, "Display UI Elements Over Lane Covers", ConfigManager.UIElementsOverLaneCover)
-                    }),
-                    new OptionsSubcategory("Multiplayer", new List<OptionsItem>()
-                    {
-                        new OptionsItemCheckbox(containerRect, "Enable Battle Royale Alerts", ConfigManager.EnableBattleRoyaleAlerts),
-                        new OptionsItemCheckbox(containerRect, "Enable Battle Royale Background Flashing", ConfigManager.EnableBattleRoyaleBackgroundFlashing)
+                        new OptionsItemCheckbox(containerRect, "Enable Top Lane Cover", ConfigManager.LaneCoverTop),
+                        new OptionsSlider(containerRect, "Top Lane Cover Height", ConfigManager.LaneCoverTopHeight),
+                        new OptionsItemCheckbox(containerRect, "Enable Bottom Lane Cover", ConfigManager.LaneCoverBottom),
+                        new OptionsSlider(containerRect, "Bottom Lane Cover Height", ConfigManager.LaneCoverBottomHeight),
+                        new OptionsItemCheckbox(containerRect, "Display UI Elements Over Lane Covers", ConfigManager.UIElementsOverLaneCover)
                     })
                 }),
                 new OptionsSection("Skin", UserInterface.OptionsSkin, new List<OptionsSubcategory>
@@ -236,6 +250,7 @@ namespace Quaver.Shared.Screens.Options
                     new OptionsSubcategory("Selection", new List<OptionsItem>()
                     {
                         new OptionsItemCustomSkin(containerRect, "Custom Skin", ConfigManager.Skin),
+                        new OptionsItemCustomSkin(containerRect, "Co-op Player 2 Skin", ConfigManager.TournamentPlayer2Skin),
                         new OptionsItemDefaultSkin(containerRect, "Default Skin", ConfigManager.DefaultSkin)
                     }),
                     new OptionsSubcategory("Navigation", new List<OptionsItem>()
@@ -255,7 +270,7 @@ namespace Quaver.Shared.Screens.Options
                     new OptionsSubcategory("Configuration", new List<OptionsItem>()
                     {
                         new OptionsSlider(containerRect, "Note & Receptor Size Scale", ConfigManager.GameplayNoteScale, i => $"{i / 100f:0.00}x")
-                            { Tags = new List<string>() {  "mini" }},
+                            {Tags = new List<string>() {"mini"}},
                         new OptionsItemCheckbox(containerRect, "Tint Hitlighting Based On Judgement Color", ConfigManager.TintHitLightingBasedOnJudgementColor)
                     })
                 }),
@@ -263,14 +278,17 @@ namespace Quaver.Shared.Screens.Options
                 {
                     new OptionsSubcategory("Gameplay", new List<OptionsItem>()
                     {
-                        new OptionsItemKeybindMultiple(containerRect, "4K Gameplay Layout", new List<Bindable<Keys>>()
+                        new OptionsItemKeybindMultiple(containerRect, "4K Gameplay Layout", new List<Bindable<GenericKey>>()
                         {
                             ConfigManager.KeyMania4K1,
                             ConfigManager.KeyMania4K2,
                             ConfigManager.KeyMania4K3,
                             ConfigManager.KeyMania4K4
-                        }),
-                        new OptionsItemKeybindMultiple(containerRect, "7K Gameplay Layout", new List<Bindable<Keys>>()
+                        })
+                        {
+                            Tags = new List<string> {"keybind", "keyboard", "keys"}
+                        },
+                        new OptionsItemKeybindMultiple(containerRect, "7K Gameplay Layout", new List<Bindable<GenericKey>>()
                         {
                             ConfigManager.KeyMania7K1,
                             ConfigManager.KeyMania7K2,
@@ -279,8 +297,11 @@ namespace Quaver.Shared.Screens.Options
                             ConfigManager.KeyMania7K5,
                             ConfigManager.KeyMania7K6,
                             ConfigManager.KeyMania7K7,
-                        }),
-                        new OptionsItemKeybindMultiple(containerRect, "7K + 1 Gameplay Layout", new List<Bindable<Keys>>()
+                        })
+                        {
+                            Tags = new List<string> {"keybind", "keyboard", "keys"}
+                        },
+                        new OptionsItemKeybindMultiple(containerRect, "7K + 1 Gameplay Layout", new List<Bindable<GenericKey>>()
                         {
                             ConfigManager.KeyLayout7KScratch1,
                             ConfigManager.KeyLayout7KScratch2,
@@ -289,23 +310,32 @@ namespace Quaver.Shared.Screens.Options
                             ConfigManager.KeyLayout7KScratch5,
                             ConfigManager.KeyLayout7KScratch6,
                             ConfigManager.KeyLayout7KScratch7,
-                        }),
-                        new OptionsItemKeybindMultiple(containerRect, "7K + 1 Scratch Lane Keys", new List<Bindable<Keys>>()
+                        })
+                        {
+                            Tags = new List<string> {"keybind", "keyboard", "keys"}
+                        },
+                        new OptionsItemKeybindMultiple(containerRect, "7K + 1 Scratch Lane Keys", new List<Bindable<GenericKey>>()
                         {
                             ConfigManager.KeyLayout7KScratch8,
                             ConfigManager.KeyLayout7KScratch9,
-                        }),
-                    }),
+                        })
+                        {
+                            Tags = new List<string> {"keybind", "keyboard", "keys"}
+                        },
+                    }) ,
                     new OptionsSubcategory("Co-op Gameplay", new List<OptionsItem>()
                     {
-                        new OptionsItemKeybindMultiple(containerRect, "4K Co-op Player 2 Layout", new List<Bindable<Keys>>()
+                        new OptionsItemKeybindMultiple(containerRect, "4K Co-op Player 2 Layout", new List<Bindable<GenericKey>>()
                         {
                             ConfigManager.KeyCoop2P4K1,
                             ConfigManager.KeyCoop2P4K2,
                             ConfigManager.KeyCoop2P4K3,
                             ConfigManager.KeyCoop2P4K4
-                        }),
-                        new OptionsItemKeybindMultiple(containerRect, "7K Co-op Player 2 Layout", new List<Bindable<Keys>>()
+                        })
+                        {
+                            Tags = new List<string> {"keybind", "keyboard", "keys"}
+                        },
+                        new OptionsItemKeybindMultiple(containerRect, "7K Co-op Player 2 Layout", new List<Bindable<GenericKey>>()
                         {
                             ConfigManager.KeyCoop2P7K1,
                             ConfigManager.KeyCoop2P7K2,
@@ -315,13 +345,16 @@ namespace Quaver.Shared.Screens.Options
                             ConfigManager.KeyCoop2P7K6,
                             ConfigManager.KeyCoop2P7K7,
                         })
+                        {
+                            Tags = new List<string> {"keybind", "keyboard", "keys"}
+                        }
                     }),
                     new OptionsSubcategory("Gameplay Controls", new List<OptionsItem>()
                     {
-                        new OptionsItemKeybind(containerRect, "Pause", ConfigManager.KeyPause),
+                        new OptionsItemKeybindGeneric(containerRect, "Pause", ConfigManager.KeyPause),
                         new OptionsItemKeybind(containerRect, "Quick Restart", ConfigManager.KeyRestartMap),
                         new OptionsItemKeybind(containerRect, "Quick Exit", ConfigManager.KeyQuickExit),
-                        new OptionsItemKeybind(containerRect, "Skip Song Intro", ConfigManager.KeySkipIntro),
+                        new OptionsItemKeybindGeneric(containerRect, "Skip Song Intro", ConfigManager.KeySkipIntro),
                         new OptionsItemKeybind(containerRect, "Decrease Scroll Speed", ConfigManager.KeyDecreaseScrollSpeed),
                         new OptionsItemKeybind(containerRect, "Increase Scroll Speed", ConfigManager.KeyIncreaseScrollSpeed),
                         new OptionsItemKeybind(containerRect, "Decrease Map Offset", ConfigManager.KeyDecreaseMapOffset),
@@ -356,17 +389,18 @@ namespace Quaver.Shared.Screens.Options
                     new OptionsSubcategory("Navigation & Maintenance", new List<OptionsItem>()
                     {
                         new OptionsItemOpenGameFolder(containerRect, "Open Game Folder"),
-                        new OptionsItemUpdateRankedStatuses(containerRect, "Update Map Ranked Statuses")
+                        new OptionsItemUpdateRankedStatuses(containerRect, "Update Map Ranked Statuses"),
+                        new OptionsItemUpdateOnlineOffsets(containerRect, "Update Map Online Offsets")
                     }),
                     new OptionsSubcategory("Installed Games", new List<OptionsItem>()
                     {
                         new OptionsItemCheckbox(containerRect, "Load Songs From Other Installed Games", ConfigManager.AutoLoadOsuBeatmaps)
                         {
-                            Tags = new List<string>{ "osu!", "other games", "db", "etterna", "sm", "stepmania" }
+                            Tags = new List<string> {"osu!", "other games", "db", "etterna", "sm", "stepmania"}
                         },
                         new OptionsItemDetectOtherGames(containerRect, "Detect Songs From Other Installed Games")
                         {
-                            Tags = new List<string>{ "osu!", "other games", "db", "etterna", "sm", "stepmania" }
+                            Tags = new List<string> {"osu!", "other games", "db", "etterna", "sm", "stepmania"}
                         },
                     }),
                     new OptionsSubcategory("Login", new List<OptionsItem>()
@@ -385,16 +419,23 @@ namespace Quaver.Shared.Screens.Options
                     }),
                     new OptionsSubcategory("Song Select", new List<OptionsItem>()
                     {
-                        new OptionsItemCheckbox(containerRect, "Display Failed Local Scores", ConfigManager.DisplayFailedLocalScores)
+                        new OptionsItemPrioritizedGameMode(containerRect, "Prioritized Game Mode"),
+                        new OptionsSlider(containerRect, "Prioritized 4K Difficulty", ConfigManager.PrioritizedMapDifficulty4K, i => $"{i / 10f:0.0}"),
+                        new OptionsSlider(containerRect, "Prioritized 7K Difficulty", ConfigManager.PrioritizedMapDifficulty7K, i => $"{i / 10f:0.0}"),
+                        new OptionsItemSuggestDifficulty(containerRect, "Suggest Difficulty from Overall Rating")
                     }),
-                    new OptionsSubcategory("Beta", new List<OptionsItem>()
+                    new OptionsSubcategory("Leaderboard", new List<OptionsItem>()
                     {
-                        new OptionsItemCheckbox(containerRect, "Skip Beta Splash Screen", ConfigManager.SkipSplashScreen),
+                        new OptionsItemCheckbox(containerRect, "Display Failed Local Scores", ConfigManager.DisplayFailedLocalScores),
                     }),
+                    // new OptionsSubcategory("Beta", new List<OptionsItem>()
+                    // {
+                    //     new OptionsItemCheckbox(containerRect, "Skip Beta Splash Screen", ConfigManager.SkipSplashScreen),
+                    // }),
                 }),
             };
 
-            SelectedSection = new Bindable<OptionsSection>(Sections.First()) { Value = Sections.First() };
+            SelectedSection = new Bindable<OptionsSection>(Sections.First()) {Value = Sections.First()};
         }
 
         /// <summary>
@@ -486,7 +527,7 @@ namespace Quaver.Shared.Screens.Options
                     categoryName += "s";
 
                 var newSection = new OptionsSection(string.Empty, FontAwesome.Get(FontAwesomeIcon.fa_magnifying_glass),
-                    new List<OptionsSubcategory> { new OptionsSubcategory(categoryName, items) });
+                    new List<OptionsSubcategory> {new OptionsSubcategory(categoryName, items)});
 
                 ContentContainers.Add(newSection, new OptionsContentContainer(newSection, Content.Size));
                 SelectedSection.Value = newSection;

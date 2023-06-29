@@ -1,12 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using MoonSharp.Interpreter;
-using MoonSharp.Interpreter.Interop;
+using Microsoft.Xna.Framework;
 using Quaver.API.Enums;
 using Quaver.API.Maps;
 using Quaver.API.Maps.Structures;
-using Quaver.Shared.Screens.Edit.Actions.HitObjects;
+using Quaver.Shared.Screens.Edit.Actions.Batch;
+using Quaver.Shared.Screens.Edit.Actions.Bookmarks;
+using Quaver.Shared.Screens.Edit.Actions.Bookmarks.Add;
+using Quaver.Shared.Screens.Edit.Actions.Bookmarks.Edit;
+using Quaver.Shared.Screens.Edit.Actions.Bookmarks.Offset;
+using Quaver.Shared.Screens.Edit.Actions.Bookmarks.Remove;
 using Quaver.Shared.Screens.Edit.Actions.HitObjects.Flip;
 using Quaver.Shared.Screens.Edit.Actions.HitObjects.Move;
 using Quaver.Shared.Screens.Edit.Actions.HitObjects.Place;
@@ -14,12 +18,16 @@ using Quaver.Shared.Screens.Edit.Actions.HitObjects.PlaceBatch;
 using Quaver.Shared.Screens.Edit.Actions.HitObjects.Remove;
 using Quaver.Shared.Screens.Edit.Actions.HitObjects.RemoveBatch;
 using Quaver.Shared.Screens.Edit.Actions.HitObjects.Resize;
+using Quaver.Shared.Screens.Edit.Actions.HitObjects.Resnap;
+using Quaver.Shared.Screens.Edit.Actions.HitObjects.Reverse;
 using Quaver.Shared.Screens.Edit.Actions.Hitsounds.Add;
 using Quaver.Shared.Screens.Edit.Actions.Hitsounds.Remove;
 using Quaver.Shared.Screens.Edit.Actions.Layers.Colors;
 using Quaver.Shared.Screens.Edit.Actions.Layers.Create;
+using Quaver.Shared.Screens.Edit.Actions.Layers.Move;
 using Quaver.Shared.Screens.Edit.Actions.Layers.Remove;
 using Quaver.Shared.Screens.Edit.Actions.Layers.Rename;
+using Quaver.Shared.Screens.Edit.Actions.Layers.Visibility;
 using Quaver.Shared.Screens.Edit.Actions.Preview;
 using Quaver.Shared.Screens.Edit.Actions.SV.Add;
 using Quaver.Shared.Screens.Edit.Actions.SV.AddBatch;
@@ -31,13 +39,15 @@ using Quaver.Shared.Screens.Edit.Actions.Timing.Add;
 using Quaver.Shared.Screens.Edit.Actions.Timing.AddBatch;
 using Quaver.Shared.Screens.Edit.Actions.Timing.ChangeBpm;
 using Quaver.Shared.Screens.Edit.Actions.Timing.ChangeBpmBatch;
+using Quaver.Shared.Screens.Edit.Actions.Timing.ChangeHidden;
 using Quaver.Shared.Screens.Edit.Actions.Timing.ChangeOffset;
 using Quaver.Shared.Screens.Edit.Actions.Timing.ChangeOffsetBatch;
+using Quaver.Shared.Screens.Edit.Actions.Timing.ChangeSignature;
+using Quaver.Shared.Screens.Edit.Actions.Timing.ChangeSignatureBatch;
 using Quaver.Shared.Screens.Edit.Actions.Timing.Remove;
 using Quaver.Shared.Screens.Edit.Actions.Timing.RemoveBatch;
 using Quaver.Shared.Screens.Edit.Actions.Timing.Reset;
 using Quaver.Shared.Screens.Edit.Components;
-using Wobble.Bindables;
 
 namespace Quaver.Shared.Screens.Edit.Actions
 {
@@ -45,7 +55,7 @@ namespace Quaver.Shared.Screens.Edit.Actions
     {
         /// <summary>
         /// </summary>
-        private EditScreen EditScreen { get; }
+        public EditScreen EditScreen { get; }
 
         /// <summary>
         /// </summary>
@@ -107,9 +117,19 @@ namespace Quaver.Shared.Screens.Edit.Actions
         public event EventHandler<EditorHitObjectsFlippedEventArgs> HitObjectsFlipped;
 
         /// <summary>
+        ///     Event invoked when a batch of hitobjects have been reversed
+        /// </summary>
+        public event EventHandler<EditorHitObjectsReversedEventArgs> HitObjectsReversed;
+
+        /// <summary>
         ///     Event invoked when a batch of hitobjects have been moved
         /// </summary>
         public event EventHandler<EditorHitObjectsMovedEventArgs> HitObjectsMoved;
+
+        /// <summary>
+        ///     Event invoked when hitobjects have been resnapped
+        /// </summary>
+        public event EventHandler<EditorActionHitObjectsResnappedEventArgs> HitObjectsResnapped;
 
         /// <summary>
         ///     Event invoked when a hitsound has been added to a group of objects
@@ -197,9 +217,24 @@ namespace Quaver.Shared.Screens.Edit.Actions
         public event EventHandler<EditorTimingPointBpmChangedEventArgs> TimingPointBpmChanged;
 
         /// <summary>
+        ///     Event invoked when the Signature of a timing point has been changed
+        /// </summary>
+        public event EventHandler<EditorTimingPointSignatureChangedEventArgs> TimingPointSignatureChanged;
+
+        /// <summary>
+        ///     Event invoked when the lines of a timing point have been hidden or unhidden
+        /// </summary>
+        public event EventHandler<EditorTimingPointHiddenChangedEventArgs> TimingPointHiddenChanged;
+
+        /// <summary>
         ///     Event invoked when a batch of timing points have had their BPM changed
         /// </summary>
         public event EventHandler<EditorChangedTimingPointBpmBatchEventArgs> TimingPointBpmBatchChanged;
+
+        /// <summary>
+        ///     Event invoked when a batch of timing points have had their Signature changed
+        /// </summary>
+        public event EventHandler<EditorChangedTimingPointSignatureBatchEventArgs> TimingPointSignatureBatchChanged;
 
         /// <summary>
         ///     Event invoked when batch of timing points have had their offset changed
@@ -216,6 +251,26 @@ namespace Quaver.Shared.Screens.Edit.Actions
         /// </summary>
         public event EventHandler<EditorChangedScrollVelocityMultiplierBatchEventArgs> ScrollVelocityMultiplierBatchChanged;
 
+        /// <summary>
+        ///     Event invoked when a bookmark has been added.
+        /// </summary>
+        public event EventHandler<EditorActionBookmarkAddedEventArgs> BookmarkAdded;
+
+        /// <summary>
+        ///     Event invoked when a bookmark has been removed.
+        /// </summary>
+        public event EventHandler<EditorActionBookmarkRemovedEventArgs> BookmarkRemoved;
+
+        /// <summary>
+        ///     Event invoked whe na bookmark has been edited.
+        /// </summary>
+        public event EventHandler<EditorActionBookmarkEditedEventArgs> BookmarkEdited;
+
+        /// <summary>
+        ///     Event invoked when a batch of bookmark's offsets have been changed.
+        /// </summary>
+        public event EventHandler<EditorActionChangeBookmarkOffsetBatchEventArgs> BookmarkBatchOffsetChanged;
+        
         /// <summary>
         /// </summary>
         /// <param name="screen"></param>
@@ -237,6 +292,12 @@ namespace Quaver.Shared.Screens.Edit.Actions
             UndoStack.Push(action);
             RedoStack.Clear();
         }
+
+        /// <summary>
+        ///     Performs a list of actions as a single action.
+        /// </summary>
+        /// <param name="actions"></param>
+        public void PerformBatch(List<IEditorAction> actions) => Perform(new EditorActionBatch(this, actions));
 
         /// <summary>
         ///     Undos the first action in the stack
@@ -391,11 +452,32 @@ namespace Quaver.Shared.Screens.Edit.Actions
         public void ChangeTimingPointBpm(TimingPointInfo tp, float bpm) => Perform(new EditorActionChangeTimingPointBpm(this, WorkingMap, tp, bpm));
 
         /// <summary>
+        ///     Changes the Signature of an existing timing point
+        /// </summary>
+        /// <param name="tp"></param>
+        /// <param name="timeSig"></param>
+        public void ChangeTimingPointSignature(TimingPointInfo tp, int timeSig) => Perform(new EditorActionChangeTimingPointSignature(this, WorkingMap, tp, timeSig));
+
+        /// <summary>
+        ///     Changes whether an existing timing point's lines are hidden or not
+        /// </summary>
+        /// <param name="tp"></param>
+        /// <param name="hidden"></param>
+        public void ChangeTimingPointHidden(TimingPointInfo tp, bool hidden) => Perform(new EditorActionChangeTimingPointHidden(this, WorkingMap, tp, hidden));
+
+        /// <summary>
         ///     Changes a batch of timing points to a new BPM
         /// </summary>
         /// <param name="tps"></param>
         /// <param name="bpm"></param>
         public void ChangeTimingPointBpmBatch(List<TimingPointInfo> tps, float bpm) => Perform(new EditorActionChangeTimingPointBpmBatch(this, WorkingMap, tps, bpm));
+
+        /// <summary>
+        ///     Changes a batch of timing points to a new signature
+        /// </summary>
+        /// <param name="tps"></param>
+        /// <param name="sig"></param>
+        public void ChangeTimingPointSignatureBatch(List<TimingPointInfo> tps, int sig) => Perform(new EditorActionChangeTimingPointSignatureBatch(this, WorkingMap, tps, sig));
 
         /// <summary>
         ///     Moves a batch of timing points' offsets by a given value
@@ -405,10 +487,62 @@ namespace Quaver.Shared.Screens.Edit.Actions
         public void ChangeTimingPointOffsetBatch(List<TimingPointInfo> tps, float offset) => Perform(new EditorActionChangeTimingPointOffsetBatch(this, WorkingMap, tps, offset));
 
         /// <summary>
-        /// Resets a timing point back to zero
+        ///     Resets a timing point back to zero
         /// </summary>
         /// <param name="tp"></param>
         public void ResetTimingPoint(TimingPointInfo tp) => Perform(new EditorActionResetTimingPoint(this, WorkingMap, tp));
+
+        /// <summary>
+        ///     Adds an editor layer to the map
+        /// </summary>
+        /// <param name="layer"></param>
+        public void CreateLayer(EditorLayerInfo layer, int index = -1) => Perform(new EditorActionCreateLayer(WorkingMap, this, EditScreen.SelectedHitObjects, layer, index));
+
+        /// <summary>
+        ///     Removes a non-default editor layer from the map
+        /// </summary>
+        /// <param name="layer"></param>
+        public void RemoveLayer(EditorLayerInfo layer)
+        {
+            if (layer != EditScreen.DefaultLayer)
+                Perform(new EditorActionRemoveLayer(this, WorkingMap, EditScreen.SelectedHitObjects, layer));
+        }
+
+        /// <summary>
+        ///     Changes the name of a non-default editor layer
+        /// </summary>
+        /// <param name="layer"></param>
+        /// <param name="name"></param>
+        public void RenameLayer(EditorLayerInfo layer, string name)
+        {
+            if (layer != EditScreen.DefaultLayer)
+                Perform(new EditorActionRenameLayer(this, WorkingMap, layer, name));
+        }
+
+        /// <summary>
+        ///     Changes the editor layer of existing hitobjects
+        /// </summary>
+        /// <param name="layer"></param>
+        /// <param name="hitObjects"></param>
+        public void MoveHitObjectsToLayer(EditorLayerInfo layer, List<HitObjectInfo> hitObjects) => Perform(new EditorActionMoveObjectsToLayer(this, WorkingMap, layer, hitObjects));
+
+        /// <summary>
+        ///     Changes the color of a non-default editor layer
+        /// </summary>
+        /// <param name="layer"></param>
+        /// <param name="color"></param>
+        public void ChangeLayerColor(EditorLayerInfo layer, Color color)
+        {
+            if (layer != EditScreen.DefaultLayer)
+                Perform(new EditorActionChangeLayerColor(this, WorkingMap, layer, color));
+        }
+
+        /// <summary>
+        ///     Toggles the visibility of an existing editor layer
+        ///     Does not get added to the undo stack
+        /// </summary>
+        /// <param name="layer"></param>
+        public void ToggleLayerVisibility(EditorLayerInfo layer) => new EditorActionToggleLayerVisibility(this, WorkingMap, layer).Perform();
 
         /// <summary>
         /// </summary>
@@ -436,6 +570,19 @@ namespace Quaver.Shared.Screens.Edit.Actions
         }
 
         /// <summary>
+        ///     Resnaps all notes in a given map to the closest of the specified snaps in the list.
+        /// </summary>
+        /// <remarks>
+        ///     The reason for working with multiple snaps is because using the first common multiple
+        ///     might not be accurate enough in terms of milliseconds. An example for this would be to
+        ///     resnap to 1/12 and 1/16 in a 200BPM map, which would result in a common multiple of 1/192.
+        ///     This results in a time of 1.56ms per snap, which is not accurate enough for our purposes.
+        /// </remarks>
+        /// <param name="snaps">List of snaps to snap to</param>
+        /// <param name="hitObjectsToResnap">List of hitobjects to resnap</param>
+        public void ResnapNotes(List<int> snaps, List<HitObjectInfo> hitObjectsToResnap) => Perform(new EditorActionResnapHitObjects(this, WorkingMap, snaps, hitObjectsToResnap, true));
+
+        /// <summary>
         ///     Detects the BPM of the map and returns the object instance
         /// </summary>
         /// <returns></returns>
@@ -446,6 +593,33 @@ namespace Quaver.Shared.Screens.Edit.Actions
         /// <param name="time"></param>
         public void SetPreviewTime(int time) => Perform(new EditorActionChangePreviewTime(this, WorkingMap, time));
 
+        /// <summary>
+        ///     Adds a bookmark to the map
+        /// </summary>
+        /// <param name="time"></param>
+        /// <param name="note"></param>
+        public void AddBookmark(int time, string note) => Perform(new EditorActionAddBookmark(this, WorkingMap, new BookmarkInfo { StartTime = time, Note = note }));
+
+        /// <summary>
+        ///     Removes a bookmark from the map.
+        /// </summary>
+        /// <param name="bookmark"></param>
+        public void RemoveBookmark(BookmarkInfo bookmark) => Perform(new EditorActionRemoveBookmark(this, WorkingMap, bookmark));
+        
+        /// <summary>
+        ///     Edits the note of an existing bookmark
+        /// </summary>
+        /// <param name="bookmark"></param>
+        /// <param name="note"></param>
+        public void EditBookmark(BookmarkInfo bookmark, string note) => Perform(new EditorActionEditBookmark(this, WorkingMap, bookmark, note));
+
+        /// <summary>
+        ///     Adjusts the offset of a batch of bookmarks
+        /// </summary>
+        /// <param name="bookmarks"></param>
+        /// <param name="offset"></param>
+        public void ChangeBookmarkBatchOffset(List<BookmarkInfo> bookmarks, int offset) => Perform(new EditorActionChangeBookmarkOffsetBatch(this, WorkingMap, bookmarks, offset)); 
+        
         /// <summary>
         ///     Triggers an event of a specific action type
         /// </summary>
@@ -527,8 +701,17 @@ namespace Quaver.Shared.Screens.Edit.Actions
                 case EditorActionType.ChangeTimingPointBpm:
                     TimingPointBpmChanged?.Invoke(this, (EditorTimingPointBpmChangedEventArgs)args);
                     break;
+                case EditorActionType.ChangeTimingPointSignature:
+                    TimingPointSignatureChanged?.Invoke(this, (EditorTimingPointSignatureChangedEventArgs)args);
+                    break;
+                case EditorActionType.ChangeTimingPointHidden:
+                    TimingPointHiddenChanged?.Invoke(this, (EditorTimingPointHiddenChangedEventArgs)args);
+                    break;
                 case EditorActionType.ChangeTimingPointBpmBatch:
                     TimingPointBpmBatchChanged?.Invoke(this, (EditorChangedTimingPointBpmBatchEventArgs)args);
+                    break;
+                case EditorActionType.ChangeTimingPointSignatureBatch:
+                    TimingPointSignatureBatchChanged?.Invoke(this, (EditorChangedTimingPointSignatureBatchEventArgs)args);
                     break;
                 case EditorActionType.ChangeTimingPointOffsetBatch:
                     TimingPointOffsetBatchChanged?.Invoke(this, (EditorChangedTimingPointOffsetBatchEventArgs)args);
@@ -538,6 +721,24 @@ namespace Quaver.Shared.Screens.Edit.Actions
                     break;
                 case EditorActionType.ChangeScrollVelocityMultiplierBatch:
                     ScrollVelocityMultiplierBatchChanged?.Invoke(this, (EditorChangedScrollVelocityMultiplierBatchEventArgs)args);
+                    break;
+                case EditorActionType.ResnapHitObjects:
+                    HitObjectsResnapped?.Invoke(this, (EditorActionHitObjectsResnappedEventArgs)args);
+                    break;
+                case EditorActionType.ReverseHitObjects:
+                    HitObjectsReversed?.Invoke(this, (EditorHitObjectsReversedEventArgs)args);
+                    break;
+                case EditorActionType.AddBookmark:
+                    BookmarkAdded?.Invoke(this, (EditorActionBookmarkAddedEventArgs) args);
+                    break;
+                case EditorActionType.RemoveBookmark:
+                    BookmarkRemoved?.Invoke(this, (EditorActionBookmarkRemovedEventArgs) args);
+                    break;
+                case EditorActionType.EditBookmark:
+                    BookmarkEdited?.Invoke(this, (EditorActionBookmarkEditedEventArgs) args);
+                    break;
+                case EditorActionType.ChangeBookmarkOffsetBatch:
+                    BookmarkBatchOffsetChanged?.Invoke(this, (EditorActionChangeBookmarkOffsetBatchEventArgs) args);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(type), type, null);
@@ -573,10 +774,19 @@ namespace Quaver.Shared.Screens.Edit.Actions
             PreviewTimeChanged = null;
             TimingPointOffsetChanged = null;
             TimingPointBpmChanged = null;
+            TimingPointSignatureChanged = null;
+            TimingPointHiddenChanged = null;
             TimingPointBpmBatchChanged = null;
+            TimingPointSignatureBatchChanged = null;
             TimingPointOffsetBatchChanged = null;
             ScrollVelocityOffsetBatchChanged = null;
             ScrollVelocityMultiplierBatchChanged = null;
+            HitObjectsResnapped = null;
+            HitObjectsReversed = null;
+            BookmarkAdded = null;
+            BookmarkRemoved = null;
+            BookmarkEdited = null;
+            BookmarkBatchOffsetChanged = null;
         }
     }
 }

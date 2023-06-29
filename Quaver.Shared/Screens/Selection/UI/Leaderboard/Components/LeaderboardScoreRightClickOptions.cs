@@ -1,8 +1,9 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
 using Microsoft.Xna.Framework;
 using Quaver.API.Replays;
+using Quaver.Server.Client.Structures;
+using Quaver.Server.Common.Objects;
 using Quaver.Shared.Config;
 using Quaver.Shared.Database.Maps;
 using Quaver.Shared.Database.Scores;
@@ -11,17 +12,13 @@ using Quaver.Shared.Graphics.Form.Dropdowns.RightClick;
 using Quaver.Shared.Graphics.Notifications;
 using Quaver.Shared.Helpers;
 using Quaver.Shared.Online;
-using Quaver.Shared.Scheduling;
-using Quaver.Shared.Screens.Gameplay;
 using Quaver.Shared.Screens.Loading;
-using Quaver.Shared.Screens.Result;
 using Quaver.Shared.Screens.Results;
 using Quaver.Shared.Screens.Selection.UI.Leaderboard.Dialogs;
 using Wobble;
 using Wobble.Graphics;
 using Wobble.Graphics.UI.Dialogs;
 using Wobble.Platform;
-using Wobble.Platform.Linux;
 
 namespace Quaver.Shared.Screens.Selection.UI.Leaderboard.Components
 {
@@ -42,6 +39,10 @@ namespace Quaver.Shared.Screens.Selection.UI.Leaderboard.Components
         private const string PlayerProfile = "Player Profile";
 
         private const string SteamProfile = "Steam Profile";
+
+        private const string AddFriend = "Add Friend";
+
+        private const string RemoveFriend = "Remove Friend";
 
         private const string Delete = "Delete";
 
@@ -134,10 +135,16 @@ namespace Quaver.Shared.Screens.Selection.UI.Leaderboard.Components
                         DialogManager.Show(new DeleteScoreDialog(Score));
                         break;
                     case PlayerProfile:
-                        BrowserHelper.OpenURL($"https://quavergame.com/profile/{Score.Name}");
+                        BrowserHelper.OpenURL($"https://quavergame.com/profile/{Score.PlayerId}");
                         break;
                     case SteamProfile:
                         BrowserHelper.OpenURL($"https://steamcommunity.com/profiles/{Score.SteamId}");
+                        break;
+                    case AddFriend:
+                        OnlineManager.AddFriend(GetUserFromScore(Score));
+                        break;
+                    case RemoveFriend:
+                        OnlineManager.RemoveFriend(GetUserFromScore(Score));
                         break;
                 }
             };
@@ -162,6 +169,12 @@ namespace Quaver.Shared.Screens.Selection.UI.Leaderboard.Components
                 options.Add(DownloadReplay, ColorHelper.HexToColor("#0FBAE5"));
                 options.Add(PlayerProfile, ColorHelper.HexToColor("#27B06E"));
                 options.Add(SteamProfile, ColorHelper.HexToColor("#0787E3"));
+
+                if (OnlineManager.FriendsList != null && OnlineManager.FriendsList.Contains(score.PlayerId))
+                    options.Add(RemoveFriend, ColorHelper.HexToColor($"#FF6868"));
+                else
+                    options.Add(AddFriend, ColorHelper.HexToColor("#27B06E"));
+
                 return options;
             }
 
@@ -170,5 +183,12 @@ namespace Quaver.Shared.Screens.Selection.UI.Leaderboard.Components
 
             return options;
         }
+
+        private static User GetUserFromScore(Score score) => new User(new OnlineUser()
+        {
+            Id = score.PlayerId,
+            SteamId = score.SteamId,
+            Username = score.Name
+        });
     }
 }

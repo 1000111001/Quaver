@@ -13,6 +13,8 @@ using Quaver.Shared.Screens.Edit.Actions.HitObjects.PlaceBatch;
 using Quaver.Shared.Screens.Edit.Actions.HitObjects.Remove;
 using Quaver.Shared.Screens.Edit.Actions.HitObjects.RemoveBatch;
 using Quaver.Shared.Screens.Edit.Actions.HitObjects.Resize;
+using Quaver.Shared.Screens.Edit.Actions.HitObjects.Resnap;
+using Quaver.Shared.Screens.Edit.Actions.HitObjects.Reverse;
 using Wobble.Audio.Tracks;
 using Wobble.Bindables;
 using Wobble.Graphics;
@@ -97,7 +99,9 @@ namespace Quaver.Shared.Screens.Edit.UI.Panels
             ActionManager.HitObjectBatchPlaced += OnHitObjectBatchPlaced;
             ActionManager.HitObjectBatchRemoved += OnHitObjectBatchRemoved;
             ActionManager.HitObjectsFlipped += OnHitObjectsFlipped;
+            ActionManager.HitObjectsReversed += OnHitObjectsReversed;
             ActionManager.HitObjectsMoved += OnHitObjectsMoved;
+            ActionManager.HitObjectsResnapped += OnHitObjectsResnapped;
             ActionManager.LongNoteResized += OnLongNoteResized;
         }
 
@@ -116,7 +120,9 @@ namespace Quaver.Shared.Screens.Edit.UI.Panels
             ActionManager.HitObjectBatchPlaced -= OnHitObjectBatchPlaced;
             ActionManager.HitObjectBatchRemoved -= OnHitObjectBatchRemoved;
             ActionManager.HitObjectsFlipped -= OnHitObjectsFlipped;
+            ActionManager.HitObjectsReversed -= OnHitObjectsReversed;
             ActionManager.HitObjectsMoved -= OnHitObjectsMoved;
+            ActionManager.HitObjectsResnapped -= OnHitObjectsResnapped;
             ActionManager.LongNoteResized -= OnLongNoteResized;
 
             base.Destroy();
@@ -296,7 +302,20 @@ namespace Quaver.Shared.Screens.Edit.UI.Panels
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="e"></param>
+        /// <exception cref="NotImplementedException"></exception>
+        private void OnHitObjectsReversed(object sender, EditorHitObjectsReversedEventArgs e) => UpdateObjects();
+
+        /// <summary>
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
         private void OnHitObjectsMoved(object sender, EditorHitObjectsMovedEventArgs e) => UpdateObjects();
+
+        /// <summary>
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        private void OnHitObjectsResnapped(object sender, EditorActionHitObjectsResnappedEventArgs e) => UpdateObjects();
 
         /// <summary>
         /// </summary>

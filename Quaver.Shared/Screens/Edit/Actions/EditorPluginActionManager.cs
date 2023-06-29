@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Microsoft.Xna.Framework;
 using MoonSharp.Interpreter;
 using MoonSharp.Interpreter.Interop;
 using Quaver.API.Enums;
@@ -23,6 +24,16 @@ namespace Quaver.Shared.Screens.Edit.Actions
         /// <param name="manager"></param>
         [MoonSharpVisible(false)]
         public EditorPluginActionManager(EditorActionManager manager) => ActionManager = manager;
+
+        /// <summary>
+        /// </summary>
+        /// <param name="action"></param>
+        public void Perform(IEditorAction action) => ActionManager.Perform(action);
+
+        /// <summary>
+        /// </summary>
+        /// <param name="actions"></param>
+        public void PerformBatch(List<IEditorAction> actions) => ActionManager.PerformBatch(actions);
 
         /// <summary>
         /// </summary>
@@ -116,6 +127,12 @@ namespace Quaver.Shared.Screens.Edit.Actions
 
         /// <summary>
         /// </summary>
+        /// <param name="tp"></param>
+        /// <param name="hidden"></param>
+        public void ChangeTimingPointHidden(TimingPointInfo tp, bool hidden) => ActionManager.ChangeTimingPointHidden(tp, hidden);
+
+        /// <summary>
+        /// </summary>
         /// <param name="tps"></param>
         /// <param name="bpm"></param>
         public void ChangeTimingPointBpmBatch(List<TimingPointInfo> tps, float bpm) => ActionManager.ChangeTimingPointBpmBatch(tps, bpm);
@@ -150,5 +167,53 @@ namespace Quaver.Shared.Screens.Edit.Actions
         /// </summary>
         /// <param name="time"></param>
         public void SetPreviewTime(int time) => ActionManager.SetPreviewTime(time);
+
+        /// <summary>
+        /// </summary>
+        /// <param name="layer"></param>
+        public void CreateLayer(EditorLayerInfo layer, int index = -1) => ActionManager.CreateLayer(layer, index);
+
+        /// <summary>
+        /// </summary>
+        /// <param name="layer"></param>
+        public void RemoveLayer(EditorLayerInfo layer) => ActionManager.RemoveLayer(layer);
+
+        /// <summary>
+        /// </summary>
+        /// <param name="layer"></param>
+        /// <param name="name"></param>
+        public void RenameLayer(EditorLayerInfo layer, string name) => ActionManager.RenameLayer(layer, name);
+
+        /// <summary>
+        /// </summary>
+        /// <param name="layer"></param>
+        /// <param name="hitObjects"></param>
+        public void MoveHitObjectsToLayer(EditorLayerInfo layer, List<HitObjectInfo> hitObjects) => ActionManager.MoveHitObjectsToLayer(layer, hitObjects);
+
+        /// <summary>
+        /// </summary>
+        /// <param name="layer"></param>
+        /// <param name="color"></param>
+        public void ChangeLayerColor(EditorLayerInfo layer, int r, int g, int b) => ActionManager.ChangeLayerColor(layer, new Color(r, g, b));
+
+        /// <summary>
+        /// </summary>
+        /// <param name="layer"></param>
+        public void ToggleLayerVisibility(EditorLayerInfo layer) => ActionManager.ToggleLayerVisibility(layer);
+
+        /// <summary>
+        /// </summary>
+        /// <param name="snaps"></param>
+        /// <param name="hitObjectsToResnap"></param>
+        public void ResnapNotes(List<int> snaps, List<HitObjectInfo> hitObjectsToResnap) =>
+            ActionManager.ResnapNotes(snaps, hitObjectsToResnap);
+
+        public void AddBookmark(int time, string note) => ActionManager.AddBookmark(time, note);
+
+        public void RemoveBookmark(BookmarkInfo bookmark) => ActionManager.RemoveBookmark(bookmark);
+
+        public void EditBookmark(BookmarkInfo bookmark, string note) => ActionManager.EditBookmark(bookmark, note);
+
+        public void ChangeBookmarkBatchOffset(List<BookmarkInfo> bookmarks, int offset) => ActionManager.ChangeBookmarkBatchOffset(bookmarks, offset);
     }
 }

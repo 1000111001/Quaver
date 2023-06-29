@@ -17,6 +17,7 @@ using MoreLinq.Extensions;
 using Quaver.API.Enums;
 using Quaver.Shared.Assets;
 using Quaver.Shared.Config;
+using Quaver.Shared.Skinning.Menus;
 using Wobble;
 using Wobble.Assets;
 using Wobble.Audio.Samples;
@@ -28,9 +29,14 @@ namespace Quaver.Shared.Skinning
     public class SkinStore
     {
         /// <summary>
+        ///     The folder name of the skin
+        /// </summary>
+        public string Skin { get; }
+
+        /// <summary>
         ///     The directory of the skin.
         /// </summary>
-        internal static string Dir
+        public string Dir
         {
             get
             {
@@ -38,9 +44,9 @@ namespace Quaver.Shared.Skinning
                     return "";
 
                 if (!ConfigManager.UseSteamWorkshopSkin.Value)
-                    return $"{ConfigManager.SkinDirectory.Value}/{ConfigManager.Skin.Value}";
+                    return $"{ConfigManager.SkinDirectory.Value}/{Skin}";
 
-                return $"{ConfigManager.SteamWorkshopDirectory.Value}/{ConfigManager.Skin.Value}";
+                return $"{ConfigManager.SteamWorkshopDirectory.Value}/{Skin}";
             }
         }
 
@@ -53,6 +59,26 @@ namespace Quaver.Shared.Skinning
         ///     Dictionary that contains both skins for 4K & 7K
         /// </summary>
         internal Dictionary<GameMode, SkinKeys> Keys { get; }
+
+        /// <summary>
+        ///     Skinning for the menu borders
+        /// </summary>
+        internal SkinMenuBorder MenuBorder { get; }
+
+        /// <summary>
+        ///     Skinning for the main menu
+        /// </summary>
+        internal SkinMenuMain MainMenu { get; }
+
+        /// <summary>
+        ///     Skinning for the Results menu
+        /// </summary>
+        internal SkinMenuResults Results { get; }
+
+        /// <summary>
+        ///     Skinning for the song select menu
+        /// </summary>
+        internal SkinMenuSongSelect SongSelect { get; }
 
         /// <summary>
         ///     The name of the skin.
@@ -90,6 +116,11 @@ namespace Quaver.Shared.Skinning
         ///     Grade Textures.
         /// </summary>
         internal Dictionary<Grade, Texture2D> Grades { get; } = new Dictionary<Grade, Texture2D>();
+
+        /// <summary>
+        ///     Grade Textures for Results.
+        /// </summary>
+        internal Dictionary<Grade, Texture2D> GradesLarge { get; } = new Dictionary<Grade, Texture2D>();
 
         /// <summary>
         ///     Judgement animation elements
@@ -154,7 +185,12 @@ namespace Quaver.Shared.Skinning
         /// <summary>
         ///     The overlay that displayed the judgement counts.
         /// </summary>
-        internal Texture2D JudgementOverlay { get; private set; }
+        internal Dictionary<Judgement, Texture2D> JudgementOverlay { get; } = new Dictionary<Judgement, Texture2D>();
+
+        /// <summary>
+        ///     The background of the judgement overlay.
+        /// </summary>
+        internal Dictionary<Judgement, Texture2D> JudgementOverlayBackground { get; } = new Dictionary<Judgement, Texture2D>();
 
         /// <summary>
         ///     The scoreboard displayed on the screen for the player.
@@ -237,8 +273,9 @@ namespace Quaver.Shared.Skinning
         /// <summary>
         ///     Ctor - Loads up a skin from a given directory.
         /// </summary>
-        internal SkinStore()
+        internal SkinStore(string skin = null)
         {
+            Skin = string.IsNullOrEmpty(skin) ? ConfigManager.Skin?.Value : skin;
             LoadConfig();
 
             // Load up Keys game mode skins.
@@ -247,6 +284,19 @@ namespace Quaver.Shared.Skinning
                 {GameMode.Keys4, new SkinKeys(this, GameMode.Keys4)},
                 {GameMode.Keys7, new SkinKeys(this, GameMode.Keys7)}
             };
+
+
+            try
+            {
+                MenuBorder = new SkinMenuBorder(this, Config);
+                MainMenu = new SkinMenuMain(this, Config);
+                Results = new SkinMenuResults(this, Config);
+                SongSelect = new SkinMenuSongSelect(this, Config);
+            }
+            catch (Exception e)
+            {
+                Logger.Error(e, LogType.Runtime);
+            }
 
             LoadUniversalElements();
 
@@ -319,7 +369,7 @@ namespace Quaver.Shared.Skinning
             }
             catch (Exception e)
             {
-                Logger.Error($"Failed to load: {resource}. Using default!", LogType.Runtime);
+                Logger.Warning($"Failed to load: {resource}. Using default!", LogType.Runtime, false);
                 return UserInterface.BlankBox;
             }
         }
@@ -334,7 +384,7 @@ namespace Quaver.Shared.Skinning
         /// <param name="columns"></param>
         /// <param name="extension"></param>
         /// <returns></returns>
-        internal static List<Texture2D> LoadSpritesheet(string folder, string element, string resource, int rows, int columns,
+        internal  List<Texture2D> LoadSpritesheet(string folder, string element, string resource, int rows, int columns,
             string extension = ".png")
         {
             try
@@ -418,43 +468,8 @@ namespace Quaver.Shared.Skinning
                 if (grade == Grade.None)
                     continue;
 
-                var element = $"grade-small-{grade.ToString().ToLower()}";
-
-                string defaultGrade = null;
-
-                switch (grade)
-                {
-                    case Grade.None:
-                        break;
-                    case Grade.A:
-                        defaultGrade = $"Quaver.Resources/Textures/Skins/Shared/Grades/grade-small-a.png";
-                        break;
-                    case Grade.B:
-                        defaultGrade = $"Quaver.Resources/Textures/Skins/Shared/Grades/grade-small-b.png";
-                        break;
-                    case Grade.C:
-                        defaultGrade = $"Quaver.Resources/Textures/Skins/Shared/Grades/grade-small-c.png";
-                        break;
-                    case Grade.D:
-                        defaultGrade = $"Quaver.Resources/Textures/Skins/Shared/Grades/grade-small-d.png";
-                        break;
-                    case Grade.F:
-                        defaultGrade = $"Quaver.Resources/Textures/Skins/Shared/Grades/grade-small-f.png";
-                        break;
-                    case Grade.S:
-                        defaultGrade = $"Quaver.Resources/Textures/Skins/Shared/Grades/grade-small-s.png";
-                        break;
-                    case Grade.SS:
-                        defaultGrade = $"Quaver.Resources/Textures/Skins/Shared/Grades/grade-small-ss.png";
-                        break;
-                    case Grade.X:
-                        defaultGrade = $"Quaver.Resources/Textures/Skins/Shared/Grades/grade-small-x.png";
-                        break;
-                    default:
-                        throw new ArgumentOutOfRangeException();
-                }
-
-                Grades[grade] = LoadSingleTexture($"{Dir}/Grades/{element}", defaultGrade);
+                Grades[grade] = LoadSingleTexture($"{Dir}/Grades/grade-small-{grade.ToString().ToLower()}", $"Quaver.Resources/Textures/Skins/Shared/Grades/grade-small-{grade.ToString().ToLower()}.png");
+                GradesLarge[grade] = LoadSingleTexture($"{Dir}/Grades/grade-large-{grade.ToString().ToLower()}", $"Quaver.Resources/Textures/UI/Results/grade-large-{grade.ToString().ToLower()}.png");
             }
         }
 
@@ -465,22 +480,27 @@ namespace Quaver.Shared.Skinning
         {
             const string folder = "Judgements";
 
-            // Load Judgements
+            // Load Judgements and judgement overlay
             foreach (Judgement j in Enum.GetValues(typeof(Judgement)))
             {
                 if (j == Judgement.Ghost)
                     continue;
 
                 var element = $"judge-{j.ToString().ToLower()}";
+                var judgementOverlay = $"judgement-overlay-{j.ToString().ToLower()}";
+                var judgementOverlayBackground = $"judgement-overlay-background-{j.ToString().ToLower()}";
+
+                // Compatibility for old skin.
+                if (!File.Exists($"{Dir}/{folder}/{judgementOverlay}.png"))
+                    judgementOverlay = "judgement-overlay";
 
                 Judgements[j] = LoadSpritesheet($"/{folder}/", element,
                     $"Quaver.Resources/Textures/Skins/Shared/Judgements/{element}", 0, 0);
+                JudgementOverlay[j] = LoadSingleTexture($"{Dir}/{folder}/{judgementOverlay}",
+                    $"Quaver.Resources/Textures/Skins/Shared/Judgements/judgement-overlay.png");
+                JudgementOverlayBackground[j] = LoadSingleTexture($"{Dir}/{folder}/{judgementOverlayBackground}",
+                    null);
             }
-
-            // Load judgement overlay
-            const string judgementOverlay = "judgement-overlay";
-            JudgementOverlay = LoadSingleTexture( $"{Dir}/{folder}/{judgementOverlay}",
-                $"Quaver.Resources/Textures/Skins/Shared/Judgements/{judgementOverlay}.png");
         }
 
         /// <summary>
@@ -628,7 +648,7 @@ namespace Quaver.Shared.Skinning
         /// <summary>
         ///     Loads all sound effect elements.
         /// </summary>
-        private void LoadSoundEffects()
+        public void LoadSoundEffects()
         {
             var sfxFolder = $"{Dir}/SFX/";
 

@@ -6,9 +6,12 @@ using Quaver.Shared.Screens.Edit.Actions.HitObjects.PlaceBatch;
 using Quaver.Shared.Screens.Edit.Actions.HitObjects.RemoveBatch;
 using Quaver.Shared.Screens.Edit.Actions.Layers.Create;
 using Wobble.Bindables;
+using MoonSharp.Interpreter;
+using MoonSharp.Interpreter.Interop;
 
 namespace Quaver.Shared.Screens.Edit.Actions.Layers.Remove
 {
+    [MoonSharpUserData]
     public class EditorActionRemoveLayer : IEditorAction
     {
         public EditorActionType Type { get; } = EditorActionType.RemoveLayer;
@@ -26,12 +29,15 @@ namespace Quaver.Shared.Screens.Edit.Actions.Layers.Remove
 
         private BindableList<HitObjectInfo> SelectedHitObjects { get; }
 
+        private int Index { get; set; }
+
         /// <summary>
         /// </summary>
         /// <param name="manager"></param>
         /// <param name="workingMap"></param>
         /// <param name="selectedHitObjects"></param>
         /// <param name="layer"></param>
+        [MoonSharpVisible(false)]
         public EditorActionRemoveLayer(EditorActionManager manager, Qua workingMap, BindableList<HitObjectInfo> selectedHitObjects,
             EditorLayerInfo layer)
         {
@@ -41,11 +47,12 @@ namespace Quaver.Shared.Screens.Edit.Actions.Layers.Remove
             SelectedHitObjects = selectedHitObjects;
         }
 
+        [MoonSharpVisible(false)]
         public void Perform()
         {
-            var index = WorkingMap.EditorLayers.IndexOf(Layer) + 1;
+            Index = WorkingMap.EditorLayers.IndexOf(Layer) + 1;
 
-            HitObjectsInLayer = WorkingMap.HitObjects.FindAll(x => x.EditorLayer == index);
+            HitObjectsInLayer = WorkingMap.HitObjects.FindAll(x => x.EditorLayer == Index);
 
             // Remove the objects from being selected
             HitObjectsInLayer.ForEach(x => SelectedHitObjects.Remove(x));
@@ -55,17 +62,18 @@ namespace Quaver.Shared.Screens.Edit.Actions.Layers.Remove
             new EditorActionRemoveHitObjectBatch(ActionManager, WorkingMap, HitObjectsInLayer).Perform();
 
             // Find HitObjects at the indices above it and update them
-            var hitObjects = WorkingMap.HitObjects.FindAll(x => x.EditorLayer > index);
+            var hitObjects = WorkingMap.HitObjects.FindAll(x => x.EditorLayer > Index);
             hitObjects.ForEach(x => x.EditorLayer--);
 
             ActionManager.TriggerEvent(EditorActionType.RemoveLayer, new EditorLayerRemovedEventArgs(Layer));
         }
 
+        [MoonSharpVisible(false)]
         public void Undo()
         {
             new EditorActionPlaceHitObjectBatch(ActionManager, WorkingMap, HitObjectsInLayer).Perform();
-            new EditorActionCreateLayer(WorkingMap, ActionManager, SelectedHitObjects, Layer).Perform();
-            HitObjectsInLayer.ForEach(x => x.EditorLayer = WorkingMap.EditorLayers.Count);
+            new EditorActionCreateLayer(WorkingMap, ActionManager, SelectedHitObjects, Layer, Index).Perform();
+            HitObjectsInLayer.ForEach(x => x.EditorLayer = Index);
         }
     }
 }

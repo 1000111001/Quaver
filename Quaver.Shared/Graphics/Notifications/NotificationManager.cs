@@ -13,6 +13,9 @@ using Microsoft.Xna.Framework.Graphics;
 using Quaver.Shared.Assets;
 using Quaver.Shared.Config;
 using Quaver.Shared.Helpers;
+using Quaver.Shared.Screens;
+using Quaver.Shared.Screens.Gameplay;
+using Wobble;
 using Wobble.Graphics;
 using Wobble.Logging;
 using Wobble.Window;
@@ -35,6 +38,11 @@ namespace Quaver.Shared.Graphics.Notifications
         ///     Notifications that are currently active
         /// </summary>
         public static List<DrawableNotification> ActiveNotifications { get; set; } = new List<DrawableNotification>();
+
+        /// <summary>
+        ///     Notifications from <see cref="QueuedNotifications"/> that can be cleared from the list
+        /// </summary>
+        private static List<DrawableNotification> NotificationsToClear { get; set; } = new List<DrawableNotification>();
 
         /// <summary>
         ///     Event invoked when a notification has been missed by the user
@@ -69,12 +77,16 @@ namespace Quaver.Shared.Graphics.Notifications
         /// <param name="level"></param>
         /// <param name="text"></param>
         /// <param name="onClick"></param>
-        internal static void Show(NotificationLevel level, string text, EventHandler onClick = null)
+        /// <param name="forceShow"></param>
+        internal static void Show(NotificationLevel level, string text, EventHandler onClick = null, bool forceShow = false)
         {
-            var info = new NotificationInfo(level, text, true, onClick);
+            var info = new NotificationInfo(level, text, true, onClick, forceShow);
             var notification = new DrawableNotification(null, info, -1) {  Alignment = Alignment.TopRight };
 
-            QueuedNotifications.Add(notification);
+            lock (QueuedNotifications)
+            {
+                QueuedNotifications.Add(notification);
+            }
         }
 
         /// <summary>
@@ -83,24 +95,38 @@ namespace Quaver.Shared.Graphics.Notifications
         /// </summary>
         private static void FlushNotificationQueue()
         {
-            foreach (var notification in QueuedNotifications)
+            var game = GameBase.Game as QuaverGame;
+
+            lock (QueuedNotifications)
             {
-                notification.Parent = Container;
-
-                if (ConfigManager.DisplayNotificationsBottomToTop?.Value ?? false)
+                foreach (var notification in QueuedNotifications)
                 {
-                    notification.Alignment = Alignment.BotRight;
-                    notification.Y = -InitialY;
-                }
-                else
-                {
-                    notification.Y = InitialY;
+                    // Prevent unimportant notifications from displaying during gameplay
+                    if (game?.CurrentScreen is GameplayScreen screen && !screen.IsPaused && !notification.Item.ForceShow
+                        && !ConfigManager.DisplayNotificationsInGameplay.Value)
+                        continue;
+
+                    notification.Parent = Container;
+
+                    if (ConfigManager.DisplayNotificationsBottomToTop?.Value ?? false)
+                    {
+                        notification.Alignment = Alignment.BotRight;
+                        notification.Y = -InitialY;
+                    }
+                    else
+                    {
+                        notification.Y = InitialY;
+                    }
+
+                    ActiveNotifications.Add(notification);
+                    NotificationsToClear.Add(notification);
                 }
 
-                ActiveNotifications.Add(notification);
+                foreach (var notification in NotificationsToClear)
+                    QueuedNotifications.Remove(notification);
             }
 
-            QueuedNotifications.Clear();
+            NotificationsToClear.Clear();
         }
 
         /// <summary>

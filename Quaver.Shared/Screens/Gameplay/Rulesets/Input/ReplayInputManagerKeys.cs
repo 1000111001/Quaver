@@ -119,10 +119,10 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Input
 
             HandleScoring();
 
-            if (!forceInput && CurrentFrame >= Replay.Frames.Count || !(Manager.CurrentAudioPosition >= Replay.Frames[CurrentFrame].Time) || !Screen.InReplayMode)
+            if (!forceInput && CurrentFrame >= Replay.Frames.Count || !(Manager.CurrentAudioOffset >= Replay.Frames[CurrentFrame].Time) || !Screen.InReplayMode)
                 return;
 
-            if (Math.Abs(Manager.CurrentAudioPosition - Replay.Frames[CurrentFrame].Time) >= 200)
+            if (Math.Abs(Manager.CurrentAudioOffset - Replay.Frames[CurrentFrame].Time) >= 200)
             {
                 CurrentFrame = Replay.Frames.FindLastIndex(x => x.Time < AudioEngine.Track.Time);
                 Logger.Important($"Skipped to replay frame: {CurrentFrame}", LogType.Runtime, false);
@@ -194,7 +194,7 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Input
             {
                 var hom = Screen.Ruleset.HitObjectManager as HitObjectManagerKeys;
 
-                if (hom?.CurrentAudioPosition >= VirtualPlayer.ScoreProcessor.Stats[i].SongPosition)
+                if (hom?.CurrentAudioOffset >= VirtualPlayer.ScoreProcessor.Stats[i].SongPosition)
                 {
                     var judgement = VirtualPlayer.ScoreProcessor.Stats[i].Judgement;
 
@@ -210,7 +210,8 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Input
                     if (judgement != Judgement.Miss)
                         playfield.Stage.HitError.AddJudgement(judgement, VirtualPlayer.ScoreProcessor.Stats[i].HitDifference);
 
-                    playfield.Stage.JudgementHitBurst.PerformJudgementAnimation(judgement);
+                    var lane = Math.Clamp(VirtualPlayer.ScoreProcessor.Stats[i].HitObject.Lane - 1, 0, playfield.Stage.JudgementHitBursts.Count - 1);
+                    playfield.Stage.JudgementHitBursts[lane].PerformJudgementAnimation(judgement);
 
                     CurrentVirtualReplayStat++;
                 }
@@ -250,7 +251,7 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Input
             CurrentVirtualReplayStat = -1;
 
             // Create a fresh scrore processor, so the score can be recalculated
-            Screen.Ruleset.ScoreProcessor = new ScoreProcessorKeys(Screen.Map, ModManager.Mods, Windows);
+            Screen.Ruleset.ScoreProcessor = new ScoreProcessorKeys(Screen.Map, Screen.Ruleset.ScoreProcessor.Mods, Windows);
 
             // Update the processor for the health bar, so it doesn't get stuck
             if (Screen.Ruleset is GameplayRulesetKeys ruleset)

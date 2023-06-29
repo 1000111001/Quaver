@@ -70,6 +70,8 @@ namespace Quaver.Shared.Screens.Multi.UI.Players
         /// </summary>
         private Sprite HostCrown { get; set; }
 
+        private bool AvatarRequested { get; set; }
+
         /// <summary>
         /// </summary>
         public MultiplayerPlayer(Bindable<MultiplayerGame> game, Drawable container, User user)
@@ -217,7 +219,24 @@ namespace Quaver.Shared.Screens.Multi.UI.Players
             }
             // FFA Color
             else
-                Border.Tint = ColorHelper.HexToColor("#0587E5");
+            {
+                if (Game.Value.HostId == User.OnlineUser.Id)
+                {
+                    Border.Tint = ColorHelper.HexToColor("#E8B636");
+                }
+                else if (Game.Value.PlayersWithoutMap.Contains(User.OnlineUser.Id))
+                {
+                    Border.Tint = ColorHelper.HexToColor("#F8645D");
+                }
+                else if (Game.Value.PlayersReady.Contains(User.OnlineUser.Id))
+                {
+                    Border.Tint = ColorHelper.HexToColor("#27AF6E");
+                }
+                else
+                {
+                    Border.Tint = ColorHelper.HexToColor("#0587E5");
+                }
+            }
 
             UpdateModifiers();
 
@@ -230,7 +249,12 @@ namespace Quaver.Shared.Screens.Multi.UI.Players
             else
             {
                 Avatar.Image = UserInterface.UnknownAvatar;
-                SteamManager.SendAvatarRetrievalRequest((ulong) User.OnlineUser.SteamId);
+
+                if (!AvatarRequested && User.HasUserInfo)
+                {
+                    SteamManager.SendAvatarRetrievalRequest((ulong) User.OnlineUser.SteamId);
+                    AvatarRequested = true;
+                }
             }
         });
 

@@ -20,6 +20,7 @@ using Quaver.Shared.Graphics;
 using Quaver.Shared.Helpers;
 using Quaver.Shared.Online;
 using Quaver.Shared.Screens.Gameplay.Rulesets.Input;
+using Quaver.Shared.Screens.Gameplay.Rulesets.Keys.HitObjects;
 using Quaver.Shared.Screens.Gameplay.Rulesets.Keys.Playfield.Health;
 using Quaver.Shared.Screens.Gameplay.UI;
 using Quaver.Shared.Screens.Gameplay.UI.Health;
@@ -31,6 +32,7 @@ using Wobble.Graphics;
 using Wobble.Graphics.Animations;
 using Wobble.Graphics.Sprites;
 using Wobble.Graphics.Sprites.Text;
+using Wobble.Helpers;
 using Wobble.Managers;
 using Wobble.Window;
 
@@ -127,7 +129,7 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Keys.Playfield
         /// <summary>
         ///     The JudgementHitBurst Sprite.
         /// </summary>
-        public JudgementHitBurst JudgementHitBurst { get; private set; }
+        public List<JudgementHitBurst> JudgementHitBursts { get; private set; }
 
         /// <summary>
         ///     When hitting an object, this is the sprite that will be shown at
@@ -540,6 +542,9 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Keys.Playfield
         /// </summary>
         private void CreateJudgementHitBurst()
         {
+            var skin = SkinManager.Skin.Keys[Screen.Map.Mode];
+            JudgementHitBursts = new List<JudgementHitBurst>(); 
+
             // Default the frames to miss.
             var frames = SkinManager.Skin.Judgements[Judgement.Miss];
 
@@ -549,11 +554,25 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Keys.Playfield
             // Set size w/ scaling.
             var size = new Vector2(firstFrame.Width, firstFrame.Height) * Skin.JudgementHitBurstScale / firstFrame.Height;
 
-            JudgementHitBurst = new JudgementHitBurst(Screen, frames, size, Skin.JudgementBurstPosY)
+            var judgementBurstCount = skin.DisplayJudgementsInEachColumn ?
+                Screen.Map.GetKeyCount(Screen.Map.HasScratchKey) : 1;
+
+            var playfieldOffset = (Playfield.Width / 2) - (Playfield.LaneSize / 2);
+
+            for (var lane = 0; lane < judgementBurstCount; lane++)
             {
-                Parent = Playfield.ForegroundContainer,
-                Alignment = Alignment.MidCenter,
-            };
+                var judgementHitBurst = new JudgementHitBurst(Screen, frames, size, Skin.JudgementBurstPosY)
+                {
+                    Parent = Playfield.ForegroundContainer,
+                    Alignment = Alignment.MidCenter,
+                    X = skin.DisplayJudgementsInEachColumn ? Receptors[lane].X - playfieldOffset : 0
+                };
+
+                if (skin.RotateJudgements && skin.DisplayJudgementsInEachColumn)
+                    judgementHitBurst.Rotation = GameplayHitObjectKeys.GetObjectRotation(Screen.Map.Mode, lane);
+
+                JudgementHitBursts.Add(judgementHitBurst);
+            }
         }
 
         /// <summary>
@@ -688,7 +707,7 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Keys.Playfield
             {
                 Image = Skin.LaneCoverTop,
                 Y = yAxis,
-                Size = new ScalableVector2(LaneCoverContainer.Width, 700),
+                Size = new ScalableVector2(LaneCoverContainer.Width, LaneCoverContainer.Height),
                 Alignment = Alignment.BotLeft,
                 Parent = LaneCoverContainer,
             };
@@ -708,7 +727,7 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Keys.Playfield
             {
                 Image = Skin.LaneCoverBottom,
                 Y = yAxis,
-                Size = new ScalableVector2(LaneCoverContainer.Width, 700),
+                Size = new ScalableVector2(LaneCoverContainer.Width, LaneCoverContainer.Height),
                 Alignment = Alignment.TopLeft,
                 Parent = LaneCoverContainer,
             };
@@ -726,7 +745,7 @@ namespace Quaver.Shared.Screens.Gameplay.Rulesets.Keys.Playfield
                     continue;
 
                 var keybind = new SpriteTextPlus(FontManager.GetWobbleFont(Fonts.LatoBlack),
-                    XnaKeyHelper.GetStringFromKey(input.BindingStore[i].Key.Value), 32)
+                    input.BindingStore[i].Key.Value.GetName(), 32)
                 {
                     Parent = Receptors[i],
                     Alignment = Playfield.ScrollDirections[i] == ScrollDirection.Down ? Alignment.TopCenter : Alignment.BotCenter,

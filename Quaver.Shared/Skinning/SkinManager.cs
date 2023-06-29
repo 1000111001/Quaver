@@ -12,6 +12,9 @@ using Quaver.Shared.Config;
 using Quaver.Shared.Graphics.Notifications;
 using Quaver.Shared.Graphics.Transitions;
 using Quaver.Shared.Scheduling;
+using Quaver.Shared.Screens;
+using Quaver.Shared.Screens.Main;
+using Quaver.Shared.Screens.Selection;
 using SharpCompress.Archives;
 using SharpCompress.Common;
 using SharpCompress.Writers.Zip;
@@ -41,12 +44,29 @@ namespace Quaver.Shared.Skinning
         /// <summary>
         ///     The currently selected skin
         /// </summary>
-        public static SkinStore Skin { get; private set; }
+        public static SkinStore Skin { get; set; }
+
+        /// <summary>
+        ///     The skin for player 2 in the tournament screen
+        /// </summary>
+        public static SkinStore TournamentPlayer2Skin { get; set; }
 
         /// <summary>
         ///     Loads the currently selected skin
         /// </summary>
-        public static void Load() => Skin = new SkinStore();
+        public static void Load()
+        {
+            Skin = new SkinStore();
+
+            if (ConfigManager.TournamentPlayer2Skin.Value == null ||
+                ConfigManager.TournamentPlayer2Skin.Value == ConfigManager.Skin.Value)
+            {
+                TournamentPlayer2Skin = Skin;
+                return;
+            }
+
+            TournamentPlayer2Skin = new SkinStore(ConfigManager.TournamentPlayer2Skin.Value);
+        }
 
         /// <summary>
         /// </summary>
@@ -68,6 +88,18 @@ namespace Quaver.Shared.Skinning
                 Load();
                 TimeSkinReloadRequested = 0;
                 SkinLoaded?.Invoke(typeof(SkinManager), new SkinReloadedEventArgs());
+
+                var game = (QuaverGame) GameBase.Game;
+
+                switch (game.CurrentScreen.Type)
+                {
+                    case QuaverScreenType.Menu:
+                        game.CurrentScreen.Exit(() => new MainMenuScreen());
+                        break;
+                    case QuaverScreenType.Select:
+                        game.CurrentScreen.Exit(() => new SelectionScreen());
+                        break;
+                }
 
                 ThreadScheduler.RunAfter(() =>
                 {
@@ -113,6 +145,7 @@ namespace Quaver.Shared.Skinning
                         if (!Directory.Exists(skinDir))
                         {
                             NotificationManager.Show(NotificationLevel.Warning, "You cannot export this skin!");
+                            SkinExportInProgress = false;
                             return;
                         }
 

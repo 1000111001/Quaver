@@ -15,6 +15,7 @@ using Quaver.Shared.Discord;
 using Quaver.Shared.Graphics;
 using Quaver.Shared.Graphics.Notifications;
 using Quaver.Shared.Helpers;
+using Quaver.Shared.Modifiers;
 using Quaver.Shared.Online;
 using Quaver.Shared.Online.API.MapsetSearch;
 using Quaver.Shared.Scheduling;
@@ -217,8 +218,10 @@ namespace Quaver.Shared.Screens.Downloading
         /// </summary>
         private void Initialize()
         {
-            if (AudioEngine.Track != null && AudioEngine.Track.IsPlaying)
+            if (AudioEngine.Track != null)
                 AudioEngine.Track?.Stop();
+
+            ModManager.RemoveSpeedMods();
 
             CurrentSearchQuery.ValueChanged += OnSearchQueryChanged;
             FilterGameMode.ValueChanged += OnGameModeChanged;
@@ -283,6 +286,9 @@ namespace Quaver.Shared.Screens.Downloading
         /// </summary>
         private void HandleInput()
         {
+            if (Exiting)
+                return;
+
             if (DialogManager.Dialogs.Count != 0)
                 return;
 
@@ -850,12 +856,11 @@ namespace Quaver.Shared.Screens.Downloading
         {
             try
             {
-                DiscordHelper.Presence.Details = "Downloading Maps";
-                DiscordHelper.Presence.State = "In the menus";
                 DiscordHelper.Presence.LargeImageText = OnlineManager.GetRichPresenceLargeKeyText(ConfigManager.SelectedGameMode.Value);
                 DiscordHelper.Presence.SmallImageKey = ModeHelper.ToShortHand(ConfigManager.SelectedGameMode.Value).ToLower();
                 DiscordHelper.Presence.SmallImageText = ModeHelper.ToLongHand(ConfigManager.SelectedGameMode.Value);
-                DiscordRpc.UpdatePresence(ref DiscordHelper.Presence);
+
+                RichPresenceHelper.UpdateRichPresence("In the menus", "Downloading Maps");
             }
             catch (Exception e)
             {
@@ -875,8 +880,6 @@ namespace Quaver.Shared.Screens.Downloading
                 if (!CurrentPreview.IsDisposed)
                     CurrentPreview.Dispose();
             }
-
-            AudioPreviews = null;
         }
 
         /// <summary>

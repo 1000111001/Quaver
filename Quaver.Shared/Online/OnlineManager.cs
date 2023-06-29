@@ -9,9 +9,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Threading;
-using Microsoft.Xna.Framework;
-using MonoGame.Extended.Collections;
 using Quaver.API.Enums;
 using Quaver.API.Helpers;
 using Quaver.Server.Client;
@@ -22,7 +19,6 @@ using Quaver.Server.Client.Events.Scores;
 using Quaver.Server.Client.Handlers;
 using Quaver.Server.Client.Structures;
 using Quaver.Server.Common.Enums;
-using Quaver.Server.Common.Helpers;
 using Quaver.Server.Common.Objects;
 using Quaver.Server.Common.Objects.Listening;
 using Quaver.Server.Common.Objects.Multiplayer;
@@ -36,35 +32,23 @@ using Quaver.Shared.Graphics;
 using Quaver.Shared.Graphics.Backgrounds;
 using Quaver.Shared.Graphics.Dialogs.Online;
 using Quaver.Shared.Graphics.Notifications;
-using Quaver.Shared.Graphics.Online.Username;
-using Quaver.Shared.Graphics.Overlays.Chatting;
 using Quaver.Shared.Graphics.Overlays.Hub;
 using Quaver.Shared.Helpers;
-using Quaver.Shared.Modifiers;
-using Quaver.Shared.Online.Chat;
 using Quaver.Shared.Scheduling;
 using Quaver.Shared.Screens;
-using Quaver.Shared.Screens.Download;
-using Quaver.Shared.Screens.Gameplay;
 using Quaver.Shared.Screens.Loading;
 using Quaver.Shared.Screens.Main;
-using Quaver.Shared.Screens.Menu;
 using Quaver.Shared.Screens.Multi;
-using Quaver.Shared.Screens.Multiplayer;
 using Quaver.Shared.Screens.MultiplayerLobby;
 using Quaver.Shared.Screens.MultiplayerLobby.UI.Dialogs;
 using Quaver.Shared.Screens.Music;
-using Quaver.Shared.Screens.Select;
-using Quaver.Shared.Screens.Select.UI.Leaderboard;
+using Quaver.Shared.Screens.Selection.UI.Leaderboard;
 using Quaver.Shared.Screens.Tournament;
 using Steamworks;
-using UniversalThreadManagement;
 using Wobble;
 using Wobble.Bindables;
-using Wobble.Discord;
 using Wobble.Graphics.UI.Dialogs;
 using Wobble.Logging;
-using static Quaver.Shared.Online.OnlineManager;
 
 namespace Quaver.Shared.Online
 {
@@ -200,12 +184,6 @@ namespace Quaver.Shared.Online
 
             Logger.Important($"Attempting to log into the Quaver server...", LogType.Network);
 
-            if (!SteamManager.AuthSessionTicketValidated)
-            {
-                Logger.Error($"Could not log in because the steam auth session ticket was not validated.", LogType.Network);
-                throw new Exception("Failed to login");
-            }
-
             // Create the new online client and subscribe to all of its online events.
             if (Client == null)
             {
@@ -236,8 +214,7 @@ namespace Quaver.Shared.Online
             }
 
             // Initiate the connection to the game server.
-            Client.Connect(SteamUser.GetSteamID().m_SteamID, SteamFriends.GetPersonaName(),
-                SteamManager.PTicket, SteamManager.PcbTicket, false);
+            Client.Connect(SteamUser.GetSteamID().m_SteamID, SteamFriends.GetPersonaName(), false);
         }
 
         /// <summary>
@@ -317,6 +294,7 @@ namespace Quaver.Shared.Online
             Client.OnGameMapsetShared += OnGameMapsetShared;
             Client.OnGameCountdownStart += OnGameCountdownStarted;
             Client.OnGameCountdownStop += OnGameCountdownStopped;
+            Client.OnTournamentModeChanged += OnTournamentModeChanged;
         }
 
         /// <summary>
@@ -520,7 +498,7 @@ namespace Quaver.Shared.Online
         /// <param name="e"></param>
         private static void OnRetrievedOnlineScores(object sender, RetrievedOnlineScoresEventArgs e)
         {
-            Logger.Important($"Retrieved scores and ranked status for: {e.Id} | {e.Md5} | {e.Response.Code}", LogType.Network);
+            Logger.Important($"Retrieved scores and ranked status for: {e.Id} | {e.Md5}", LogType.Network);
 
             try
             {
@@ -565,18 +543,19 @@ namespace Quaver.Shared.Online
                 }
 
                 map.DateLastUpdated = e.Response.DateLastUpdated;
+                map.OnlineOffset = e.Response.OnlineOffset;
                 MapDatabaseCache.UpdateMap(map);
 
                 var game = GameBase.Game as QuaverGame;
 
-                // If in song select, update the banner of the currently selected map.
-                if (game.CurrentScreen is SelectScreen screen)
-                {
-                    var view = screen.View as SelectScreenView;
-
-                    if (MapManager.Selected.Value == map)
-                        view.Banner.RankedStatus.UpdateMap(map);
-                }
+                // // If in song select, update the banner of the currently selected map.
+                // if (game.CurrentScreen is SelectScreen screen)
+                // {
+                //     var view = screen.View as SelectScreenView;
+                //
+                //     if (MapManager.Selected.Value == map)
+                //         view.Banner.RankedStatus.UpdateMap(map);
+                // }
             }
             catch (Exception)
             {
@@ -603,12 +582,19 @@ namespace Quaver.Shared.Online
             Self.Stats[e.Response.GameMode] = e.Response.Stats.ToUserStats(e.Response.GameMode);
 
             // Unlock any achievements
-            if (e.Response.Achievements.Count > 0)
+            if (e.Response.Achievements != null && e.Response.Achievements.Count > 0)
                 new SteamAchievements(e.Response.Achievements).Unlock();
 
-            DiscordHelper.Presence.LargeImageText = GetRichPresenceLargeKeyText(e.Response.GameMode);
-            DiscordHelper.Presence.EndTimestamp = 0;
-            DiscordRpc.UpdatePresence(ref DiscordHelper.Presence);
+            try
+            {
+                DiscordHelper.Presence.LargeImageText = GetRichPresenceLargeKeyText(e.Response.GameMode);
+                DiscordHelper.Presence.EndTimestamp = 0;
+                DiscordRpc.UpdatePresence(ref DiscordHelper.Presence);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, LogType.Runtime);
+            }
         }
 
         /// <summary>
@@ -690,7 +676,7 @@ namespace Quaver.Shared.Online
                     continue;
 
                 var onlineUser = OnlineUsers[user.Key];
-                onlineUser.CurrentStatus = user.Value;
+                onlineUser.CurrentStatus = user.Value ?? new UserClientStatus(ClientStatus.InMenus, -1, "", 1, "", 0);
 
                 // ChatManager.Dialog.OnlineUserList?.UpdateUserInfo(onlineUser);
             }
@@ -1389,7 +1375,8 @@ namespace Quaver.Shared.Online
 
             SpectatorClients.Remove(e.UserId);
 
-            NotificationManager.Show(NotificationLevel.Info, $"You are no longer spectating anymore!");
+            if (CurrentGame == null)
+                NotificationManager.Show(NotificationLevel.Info, $"You are no longer spectating anymore!");
 
             var game = (QuaverGame) GameBase.Game;
 
@@ -1740,6 +1727,15 @@ namespace Quaver.Shared.Online
             CurrentGame.CountdownStartTime = e.TimeStarted;
         }
 
+        private static void OnTournamentModeChanged(object sender, TournamentModeEventArgs e)
+        {
+            if (CurrentGame == null)
+                return;
+
+            CurrentGame.TournamentMode = e.TournamentMode;
+            Logger.Debug($"Tournament Mode Updated: {CurrentGame.TournamentMode}", LogType.Network, false);
+        }
+
         /// <summary>
         ///     Leaves the current multiplayer game if any
         /// </summary>
@@ -1916,6 +1912,7 @@ namespace Quaver.Shared.Online
                 });
             });
 
+            ScoresHelper.SetRatingProcessors(scores);
             return scores;
         }
     }
